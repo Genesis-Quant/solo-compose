@@ -6,6 +6,7 @@ Solo 个人量化研究工作台的部署仓库，通过 Git submodule 固定各
 | --- | --- |
 | `backend` | [solo-backend](https://github.com/Genesis-Quant/solo-backend) |
 | `frontend` | [solo-frontend](https://github.com/Genesis-Quant/solo-frontend) |
+| `jupyter` | [solo-jupyter](https://github.com/Genesis-Quant/solo-jupyter) |
 | `backtest` | [backtest](https://github.com/Genesis-Quant/backtest) |
 | `algos` | [solo-algos](https://github.com/Genesis-Quant/solo-algos) |
 | `algos/scheme` | [solo-algo-scheme](https://github.com/Genesis-Quant/solo-algo-scheme)，由 `algos` 管理 |
@@ -38,6 +39,6 @@ docker compose up -d --build
 - 后端文档：<http://127.0.0.1:8010/docs>
 - 健康检查：<http://127.0.0.1:8010/health>
 
-当前 Compose 包含 Backend 和 Frontend。前端使用固定报告示例；后端为基础骨架。Jupyter、DolphinScheduler Worker 和研究输出共享目录尚未接入部署。
+当前根目录 Compose 包含 Backend 和 Frontend。前端使用固定报告示例；后端为基础骨架。`jupyter` 保存独立的镜像构建与 Compose 配置，沿用 nj 的代理和外部网络设置，尚未合并到根目录 Compose。DolphinScheduler Worker 和研究输出共享目录尚未接入部署。
 
 在子仓库中提交并推送改动后，再在本仓库提交对应 submodule 的版本指针。嵌套的 `scheme` 改动需依次推送 `scheme`、`algos` 和本仓库。

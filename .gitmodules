@@ -10,3 +10,6 @@
 [submodule "algos"]
 	path = algos
 	url = https://github.com/Genesis-Quant/solo-algos.git
+[submodule "jupyter"]
+	path = jupyter
+	url = https://github.com/Genesis-Quant/solo-jupyter.git
