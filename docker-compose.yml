@@ -6,18 +6,29 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    env_file: .env
+    user: "1000:100"
     environment:
       PGSQL_HOST: host.docker.internal
-      PGSQL_PORT: "5432"
+      PGSQL_PORT: ${PGSQL_PORT:-5432}
+      PGSQL_USER: ${PGSQL_USER:?Set PGSQL_USER in .env}
+      PGSQL_PASSWORD: ${PGSQL_PASSWORD:?Set PGSQL_PASSWORD in .env}
+      SOLO_DATABASE: ${SOLO_DATABASE:-solo}
+      DOLPHINSCHEDULER_DATABASE: ${DOLPHINSCHEDULER_DATABASE:-solo_ds}
+      SOLO_WEB_ORIGINS: ${SOLO_WEB_ORIGINS:-http://127.0.0.1:5174,http://localhost:5174}
+      SOLO_SHARED_DIR: /shared
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_BIND_PORT:-8010}:8000"
     working_dir: /workspace/backend
-    command: ["sh", "-c", "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /workspace/backend"]
+    command: ["sh", "-c", "umask 0002 && alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /workspace/backend"]
     volumes:
       - ./backend:/workspace/backend
+      - solo-projects:/shared/projects
+      - solo-runs:/shared/runs
+    depends_on:
+      jupyter:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 10s
@@ -40,4 +51,75 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5174').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
     restart: unless-stopped
+
+  jupyter:
+    image: solo/jupyter:0.1.0
+    build:
+      context: ./jupyter
+      args:
+        NOTEBOOK_IMAGE: ${JUPYTER_BASE_IMAGE:-quay.io/jupyter/scipy-notebook:latest}
+        HTTP_PROXY: ${BUILD_HTTP_PROXY:-}
+        HTTPS_PROXY: ${BUILD_HTTPS_PROXY:-}
+        http_proxy: ${BUILD_HTTP_PROXY:-}
+        https_proxy: ${BUILD_HTTPS_PROXY:-}
+    user: root
+    working_dir: /shared/projects
+    command:
+      - bash
+      - -ec
+      - |
+        chmod 2770 /shared/projects /shared/runs
+        chmod 700 /home/jovyan/.local/share/keyrings /home/jovyan/.codex
+        exec start-jupyter.sh --ServerApp.root_dir=/shared --ServerApp.default_url=/lab
+    mem_limit: 4096m
+    memswap_limit: 4096m
+    environment:
+      NB_UID: "1000"
+      NB_GID: "100"
+      CHOWN_HOME: "yes"
+      CHOWN_HOME_OPTS: "-R"
+      CHOWN_EXTRA: /shared/projects,/shared/runs
+      NB_UMASK: "0002"
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
+      SOLO_SHARED_DIR: /shared
+      HTTP_PROXY: ${JUPYTER_HTTP_PROXY:-}
+      HTTPS_PROXY: ${JUPYTER_HTTPS_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,::1,backend,frontend,jupyter,host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${JUPYTER_BIND_IP:-127.0.0.1}:${JUPYTER_BIND_PORT:-8888}:8888"
+    volumes:
+      - solo-projects:/shared/projects
+      - solo-runs:/shared/runs
+      - ./jupyter/config:/home/jovyan/.jupyter
+      - jupyter-keyrings:/home/jovyan/.local/share/keyrings
+      - codex-home:/home/jovyan/.codex
+      - ./jupyter/config/nbconvert/templates/latex/index.tex.j2:/opt/conda/share/jupyter/nbconvert/templates/latex/index.tex.j2:ro
+      - ./jupyter/ipython_config.py:/etc/ipython/ipython_config.py:ro
+    secrets:
+      - jupyter-keyring-password
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/login', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  solo-projects:
+  solo-runs:
+  jupyter-keyrings:
+  codex-home:
+
+secrets:
+  jupyter-keyring-password:
+    file: ./.secrets/jupyter-keyring-password
