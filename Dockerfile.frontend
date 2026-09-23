@@ -1,0 +1,7 @@
+FROM node:24-alpine
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY frontend/ ./
+EXPOSE 5174
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

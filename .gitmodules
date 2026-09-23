@@ -1,0 +1,12 @@
+[submodule "backend"]
+	path = backend
+	url = https://github.com/Genesis-Quant/solo-backend.git
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/Genesis-Quant/solo-frontend.git
+[submodule "backtest"]
+	path = backtest
+	url = https://github.com/Genesis-Quant/backtest.git
+[submodule "algos"]
+	path = algos
+	url = https://github.com/Genesis-Quant/solo-algos.git
