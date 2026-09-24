@@ -87,14 +87,6 @@ Jupyter 使用镜像自带的 `CHOWN_HOME`、`CHOWN_EXTRA` 在启动时设置卷
 
 `docker compose down` 保留数据，`docker compose down -v` 会删除上述命名卷。备份加密凭据库时同时保存 `.secrets/jupyter-keyring-password`，已有密钥不要重新生成。`.env` 和 `.secrets` 均不提交到 Git。
 
-验证共享目录（宿主机 Python 3.10+，仅使用标准库）：
-
-```bash
-python scripts/check_shared.py
-```
-
-脚本以 UID 1000 验证双向文件和 Parquet 读写，并验证 Jupyter Contents API，结束后清理测试文件。加 `--recreate` 会重建 Backend 和 Jupyter，再检查数据仍在；重建会结束现有 Notebook 内核。
-
 ## DolphinScheduler 工作流
 
 部署方式与 Arena 一致：3.2.2 standalone + PostgreSQL。Solo 使用 `solo_ds`，宿主机 API 端口 `12346`、Python Gateway 端口 `25334`，容器内端口仍为 `12345 / 25333`。`dolphinscheduler-schema-initializer` 仅初始化/升级 DS 数据库表，完成后退出；共享目录仍由 Jupyter 设置权限，没有共享目录 init 服务。
@@ -117,11 +109,9 @@ docker compose exec backend python -m core.scheduler instance <instance-id>
 docker compose exec backend python -m core.scheduler tasks <instance-id>
 docker compose exec backend python -m core.scheduler log <task-id> --offset 0 --limit 1000
 
-# 真实集成验证：构建测试 wheel，运行因子/策略，再验证错误哈希会失败
-python scripts/check_scheduler.py
 ```
 
-集成验证使用既有 DolphinDB 中 2026 年 6 月的行情，保留 `/shared/runs/scheduler-check-*/`，内含输入、wheel、独立 uv 环境、报告和 `verification.json`。报告同时由 Backend、Jupyter、Worker 以业务 UID 读取验证。调度日志通过 DS API 获取，不另存业务日志表。
+调度日志通过 DS API 获取，不另存业务日志表。
 
 ## 更新组件
 
