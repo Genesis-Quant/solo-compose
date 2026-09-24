@@ -7,6 +7,7 @@ Solo 个人量化研究工作台的部署仓库，通过 Git submodule 固定各
 | `backend` | [solo-backend](https://github.com/Genesis-Quant/solo-backend) |
 | `frontend` | [solo-frontend](https://github.com/Genesis-Quant/solo-frontend) |
 | `jupyter` | [solo-jupyter](https://github.com/Genesis-Quant/solo-jupyter) |
+| `runtime` | [solo-runtime](https://github.com/Genesis-Quant/solo-runtime) |
 | `backtest` | [backtest](https://github.com/Genesis-Quant/backtest) |
 | `algos` | [solo-algos](https://github.com/Genesis-Quant/solo-algos) |
 | `algos/scheme` | [solo-algo-scheme](https://github.com/Genesis-Quant/solo-algo-scheme)，由 `algos` 管理 |

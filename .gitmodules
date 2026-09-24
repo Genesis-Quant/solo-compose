@@ -13,3 +13,6 @@
 [submodule "jupyter"]
 	path = jupyter
 	url = https://github.com/Genesis-Quant/solo-jupyter.git
+[submodule "runtime"]
+	path = runtime
+	url = https://github.com/Genesis-Quant/solo-runtime.git
