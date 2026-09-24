@@ -1,6 +1,67 @@
 name: solo
 
+x-dolphinscheduler-environment: &dolphinscheduler-environment
+  DATABASE: postgresql
+  SPRING_PROFILES_ACTIVE: postgresql
+  SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+  SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:${PGSQL_PORT:-5432}/${DOLPHINSCHEDULER_DATABASE:-solo_ds}
+  SPRING_DATASOURCE_USERNAME: ${PGSQL_USER:?Set PGSQL_USER in .env}
+  SPRING_DATASOURCE_PASSWORD: ${PGSQL_PASSWORD:?Set PGSQL_PASSWORD in .env}
+
 services:
+  dolphinscheduler-schema-initializer:
+    image: apache/dolphinscheduler-tools:3.2.2
+    environment: *dolphinscheduler-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["tools/bin/upgrade-schema.sh"]
+    restart: "no"
+
+  dolphinscheduler-standalone:
+    image: solo/dolphinscheduler-standalone:3.2.2-runtime-1.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+    environment:
+      <<: *dolphinscheduler-environment
+      TZ: Asia/Shanghai
+      SPRING_JACKSON_TIME_ZONE: UTC
+      API_PYTHON_GATEWAY_ENABLED: "true"
+      API_PYTHON_GATEWAY_AUTH_TOKEN: ${DOLPHINSCHEDULER_PYTHON_GATEWAY_TOKEN:?Set DolphinScheduler gateway token in .env}
+      MASTER_SERVER_LOAD_PROTECTION_ENABLED: "false"
+      WORKER_SERVER_LOAD_PROTECTION_ENABLED: "false"
+      WORKER_TENANT_CONFIG_DEFAULT_TENANT_ENABLED: "true"
+      DOLPHIN_HOST: ${DOLPHIN_HOST:?Set DOLPHIN_HOST in .env}
+      DOLPHIN_PORT: ${DOLPHIN_PORT:-8848}
+      DOLPHIN_RUNTIME_USERNAME: ${DOLPHIN_RUNTIME_USERNAME:?Set DolphinDB username in .env}
+      DOLPHIN_RUNTIME_PASSWORD: ${DOLPHIN_RUNTIME_PASSWORD:?Set DolphinDB password in .env}
+      DOLPHIN_CORE_DATABASE: ${DOLPHIN_CORE_DATABASE:-dfs://CoreData}
+      DOLPHIN_CORE_TABLE: ${DOLPHIN_CORE_TABLE:-coreData}
+      DOLPHIN_SNAPSHOT_DATABASE: ${DOLPHIN_SNAPSHOT_DATABASE:-dfs://StockSnapshot}
+      DOLPHIN_SNAPSHOT_TABLE: ${DOLPHIN_SNAPSHOT_TABLE:-snapshot}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${DOLPHINSCHEDULER_API_PORT:-12346}:12345"
+      - "127.0.0.1:${DOLPHINSCHEDULER_GATEWAY_PORT:-25334}:25333"
+    volumes:
+      - solo-runs:/shared/runs
+      - dolphinscheduler-resources:/tmp/dolphinscheduler
+      - dolphinscheduler-logs:/opt/dolphinscheduler/logs
+    depends_on:
+      dolphinscheduler-schema-initializer:
+        condition: service_completed_successfully
+      jupyter:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:12345/dolphinscheduler/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
   backend:
     image: solo/backend:0.1.0
     build:
@@ -14,8 +75,18 @@ services:
       PGSQL_PASSWORD: ${PGSQL_PASSWORD:?Set PGSQL_PASSWORD in .env}
       SOLO_DATABASE: ${SOLO_DATABASE:-solo}
       DOLPHINSCHEDULER_DATABASE: ${DOLPHINSCHEDULER_DATABASE:-solo_ds}
+      DOLPHINSCHEDULER_ENABLED: "true"
+      DOLPHINSCHEDULER_HOST: dolphinscheduler-standalone
+      DOLPHINSCHEDULER_API_PORT: "12345"
+      DOLPHINSCHEDULER_GATEWAY_PORT: "25333"
+      DOLPHINSCHEDULER_USERNAME: ${DOLPHINSCHEDULER_USERNAME:-solo-scheduler}
+      DOLPHINSCHEDULER_PASSWORD: ${DOLPHINSCHEDULER_PASSWORD:?Set DolphinScheduler password in .env}
+      DOLPHINSCHEDULER_PYTHON_GATEWAY_TOKEN: ${DOLPHINSCHEDULER_PYTHON_GATEWAY_TOKEN:?Set DolphinScheduler gateway token in .env}
       SOLO_WEB_ORIGINS: ${SOLO_WEB_ORIGINS:-http://127.0.0.1:5174,http://localhost:5174}
       SOLO_SHARED_DIR: /shared
+      JUPYTER_URL: ${JUPYTER_URL:-http://127.0.0.1:8888}
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -28,6 +99,8 @@ services:
       - solo-runs:/shared/runs
     depends_on:
       jupyter:
+        condition: service_healthy
+      dolphinscheduler-standalone:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
@@ -43,6 +116,7 @@ services:
       dockerfile: Dockerfile.frontend
     environment:
       SOLO_BACKEND_URL: http://backend:8000
+      CHOKIDAR_USEPOLLING: "true"
     ports:
       - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_BIND_PORT:-5174}:5174"
     volumes:
@@ -87,6 +161,8 @@ services:
       CHOWN_HOME_OPTS: "-R"
       CHOWN_EXTRA: /shared/projects,/shared/runs
       NB_UMASK: "0002"
+      JUPYTER_PATH: /shared/projects/.jupyter
+      JP_LSP_VIRTUAL_DIR: /shared/projects/.virtual_documents
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
       SOLO_SHARED_DIR: /shared
       HTTP_PROXY: ${JUPYTER_HTTP_PROXY:-}
@@ -119,6 +195,8 @@ volumes:
   solo-runs:
   jupyter-keyrings:
   codex-home:
+  dolphinscheduler-resources:
+  dolphinscheduler-logs:
 
 secrets:
   jupyter-keyring-password:

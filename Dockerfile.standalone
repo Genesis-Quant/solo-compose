@@ -1,0 +1,42 @@
+FROM ghcr.io/astral-sh/uv:0.11.25 AS uv
+FROM python:3.12-slim-bookworm AS runtime-builder
+COPY --from=uv /uv /uvx /usr/local/bin/
+WORKDIR /build
+COPY runtime/pyproject.toml runtime/uv.lock runtime/README.md /build/runtime/
+COPY runtime/src /build/runtime/src
+RUN uv build /build/runtime --wheel --out-dir /dist
+
+FROM apache/dolphinscheduler-standalone-server:3.2.2
+USER root
+ARG UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple
+ARG UV_PYTHON_INSTALL_MIRROR=https://registry.npmmirror.com/-/binary/python-build-standalone
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git psmisc libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=uv /uv /uvx /usr/local/bin/
+ENV UV_PYTHON_INSTALL_DIR=/opt/solo-runtime/python \
+    UV_PYTHON_INSTALL_MIRROR=${UV_PYTHON_INSTALL_MIRROR} \
+    UV_PYTHON_PREFERENCE=only-managed \
+    UV_DEFAULT_INDEX=${UV_DEFAULT_INDEX} \
+    UV_LINK_MODE=copy \
+    VIRTUAL_ENV=/opt/solo-runtime/.venv
+RUN uv python install 3.12 && uv venv --python 3.12 "${VIRTUAL_ENV}"
+COPY --from=runtime-builder /dist /opt/solo-runtime/wheels
+RUN uv pip install --python "${VIRTUAL_ENV}/bin/python" --no-deps /opt/solo-runtime/wheels/*.whl \
+    && "${VIRTUAL_ENV}/bin/solo-manage" --help
+
+# 与 Backend/Jupyter 的共享卷使用相同 UID/GID。
+RUN useradd --uid 1000 --gid 100 --create-home --shell /bin/bash solo \
+    && printf '\nexport PATH="/opt/solo-runtime/.venv/bin:/usr/local/bin:$PATH"\nexport UV_PYTHON_INSTALL_DIR=/opt/solo-runtime/python\nexport UV_PYTHON_PREFERENCE=only-managed\nexport UV_LINK_MODE=copy\numask 0002\n' \
+        >> /opt/dolphinscheduler/conf/dolphinscheduler_env.sh \
+    && sed -i 's|^shell.env_source_list=.*$|shell.env_source_list=/opt/dolphinscheduler/conf/dolphinscheduler_env.sh|' \
+        /opt/dolphinscheduler/conf/common.properties \
+    && printf '%s\n' \
+        'Defaults env_keep += "DOLPHIN_HOST DOLPHIN_PORT DOLPHIN_RUNTIME_USERNAME DOLPHIN_RUNTIME_PASSWORD"' \
+        'Defaults env_keep += "DOLPHIN_CORE_DATABASE DOLPHIN_CORE_TABLE DOLPHIN_SNAPSHOT_DATABASE DOLPHIN_SNAPSHOT_TABLE"' \
+        'Defaults env_keep += "UV_DEFAULT_INDEX UV_PYTHON_INSTALL_MIRROR"' \
+        'Defaults env_keep += "TUSHARE_TOKEN"' \
+        > /etc/sudoers.d/solo-runtime-env \
+    && chmod 0440 /etc/sudoers.d/solo-runtime-env \
+    && visudo -cf /etc/sudoers.d/solo-runtime-env
+ENV PATH="/opt/solo-runtime/.venv/bin:${PATH}"
