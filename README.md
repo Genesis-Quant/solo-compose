@@ -4,19 +4,33 @@ Solo 个人量化研究工作台的部署仓库，通过 Git submodule 固定各
 
 | 目录 | 仓库 |
 | --- | --- |
-| `backend` | [solo-backend](https://github.com/Genesis-Quant/solo-backend) |
-| `frontend` | [solo-frontend](https://github.com/Genesis-Quant/solo-frontend) |
-| `jupyter` | [solo-jupyter](https://github.com/Genesis-Quant/solo-jupyter) |
-| `runtime` | [solo-runtime](https://github.com/Genesis-Quant/solo-runtime) |
-| `backtest` | [backtest](https://github.com/Genesis-Quant/backtest) |
-| `algos` | [solo-algos](https://github.com/Genesis-Quant/solo-algos) |
-| `algos/scheme` | [solo-algo-scheme](https://github.com/Genesis-Quant/solo-algo-scheme)，由 `algos` 管理 |
+| `backend` | [solo-backend](https://gitee.com/genesis-quant/solo-backend) |
+| `frontend` | [solo-frontend](https://gitee.com/genesis-quant/solo-frontend) |
+| `jupyter` | [solo-jupyter](https://gitee.com/genesis-quant/solo-jupyter) |
+| `runtime` | [solo-runtime](https://gitee.com/genesis-quant/solo-runtime) |
+| `backtest` | [backtest](https://gitee.com/genesis-quant/backtest) |
+| `algos` | [solo-algos](https://gitee.com/genesis-quant/solo-algos) |
+| `algos/scheme` | [solo-algo-scheme](https://gitee.com/genesis-quant/solo-algo-scheme)，由 `algos` 管理 |
 
 ## 获取代码
 
 ```bash
-git clone --recurse-submodules https://github.com/Genesis-Quant/solo-compose.git
+git clone --recurse-submodules https://gitee.com/genesis-quant/solo-compose.git
 cd solo-compose
+```
+
+默认仓库位于 Gitee；GitHub 保留同步副本。本机各仓库的 `origin` 从 Gitee 拉取，
+配置两个 push URL，普通 `git push` 会依次推送 Gitee 和 GitHub。
+`gitee`、`github` 是分别操作单端的 remote。双端推送不是原子操作，失败时需检查两端结果后重试。
+这些设置属于本机 Git 配置，新克隆的仓库需同样配置（子模块也需逐个配置）：
+
+```bash
+git remote add gitee https://gitee.com/genesis-quant/solo-compose.git
+git remote add github https://github.com/Genesis-Quant/solo-compose.git
+git remote set-url --add --push origin https://gitee.com/genesis-quant/solo-compose.git
+git remote set-url --add --push origin https://github.com/Genesis-Quant/solo-compose.git
+git config remote.pushDefault origin
+git config push.followTags true
 ```
 
 已有工作区更新到仓库固定的组件版本：
@@ -67,9 +81,9 @@ Jupyter 通过 `scheme.apps` 调用研究 SDK；Worker 使用 `solo-manage run -
 
 创建项目时先选择 Scheme 版本，再选择同大版本的 Algo 模板版本。后端记录双方 Tag/commit；发布依赖声明整个 Scheme 大版本范围，项目 uv source 与锁文件固定实际使用的 commit。前端按运行清单中的实际 Scheme 大版本选择报告适配器，未知版本不回退解释。
 
-项目根目录 `.solo` 是供插件读取的 JSON 文件，字段为 `project_id`、`name`、`kind`、`scheme_version`、`scheme_commit`、`algo_version`、`algo_commit`；项目 ID 在改名后保持不变。每个项目保存独立 `.venv`、`uv.lock`，Python 解释器保存在共享卷的 `.python` 目录，Kernel 注册信息保存在 `.jupyter/kernels`。这些目录在重建容器后保留。
+项目根目录 `.solo` 是供插件读取的 JSON 文件，字段为 `project_id`、`name`、`kind`、`scheme_version`、`scheme_commit`、`algo_version`、`algo_commit`；项目 ID 在改名后保持不变。每个项目保存独立 `.venv`、`uv.lock`。Python 解释器保存在 `/home/jovyan/.python`，Kernel 注册信息保存在 `/home/jovyan/.jupyter/kernels`，代码补全临时文件保存在 `/home/jovyan/.virtual_documents`；通过卷挂载在容器重建后保留，不占用 `projects` 目录。
 
-`GITHUB_TOKEN` 可选；`JUPYTER_URL` 是浏览器访问 Jupyter 的地址，修改端口时需同步调整。首次创建需要下载 Python 与依赖，安装失败时页面显示错误并清理未完成的项目目录。
+`GITEE_TOKEN` 可选；`JUPYTER_URL` 是浏览器访问 Jupyter 的地址，修改端口时需同步调整。首次创建需要下载 Python 与依赖，安装失败时页面显示错误并清理未完成的项目目录。
 
 ## 共享目录
 
@@ -84,7 +98,7 @@ Jupyter 通过 `scheme.apps` 调用研究 SDK；Worker 使用 `solo-manage run -
 
 Backend 和 Jupyter 统一使用 `SOLO_SHARED_DIR=/shared`。Jupyter 文件浏览器根目录为 `/shared`，项目链接使用 `/lab/tree/projects/<项目类型>/<项目名>/research.ipynb`。Frontend 不直接挂载共享卷。Worker 只挂载 runs 卷，不访问项目源码卷。
 
-Jupyter 使用镜像自带的 `CHOWN_HOME`、`CHOWN_EXTRA` 在启动时设置卷归属，Backend 等待 Jupyter 健康后启动；两个服务的业务进程均使用 UID 1000、GID 100，无独立初始化服务。命名卷保存在 Docker Desktop 的 Linux 文件系统中，适合项目虚拟环境；不是 Windows 源码目录的映射。Jupyter 配置仍由 `jupyter/config` 持久化。
+Backend 和 Jupyter 均以 root 运行，无独立初始化服务。Jupyter 直接启动，不经过镜像切换到 jovyan 的入口脚本，HOME 仍为 `/home/jovyan`，沿用已有配置、凭据库和 Codex 登录状态。命名卷保存在 Docker Desktop 的 Linux 文件系统中，适合项目虚拟环境；不是 Windows 源码目录的映射。Jupyter 配置仍由 `jupyter/config` 持久化。
 
 `docker compose down` 保留数据，`docker compose down -v` 会删除上述命名卷。备份加密凭据库时同时保存 `.secrets/jupyter-keyring-password`，已有密钥不要重新生成。`.env` 和 `.secrets` 均不提交到 Git。
 
@@ -92,7 +106,7 @@ Jupyter 使用镜像自带的 `CHOWN_HOME`、`CHOWN_EXTRA` 在启动时设置卷
 
 部署方式与 Arena 一致：3.2.2 standalone + PostgreSQL。Solo 使用 `solo_ds`，宿主机 API 端口 `12346`、Python Gateway 端口 `25334`，容器内端口仍为 `12345 / 25333`。`dolphinscheduler-schema-initializer` 仅初始化/升级 DS 数据库表，完成后退出；共享目录仍由 Jupyter 设置权限，没有共享目录 init 服务。
 
-Backend 启动时通过 Python Gateway 同步 `solo-runtime` 项目下的 `factor`、`backtest` 两个工作流。两者均为手动触发的单 Shell 任务，不设置定时计划，不自动重试。Worker 内置 `solo-runtime==1.0.0`，任务以 `solo` 租户（UID 1000 / GID 100）运行。
+Backend 启动时通过 Python Gateway 同步 `solo-runtime` 项目下的 `factor`、`backtest` 两个工作流。两者均为手动触发的单 Shell 任务，不设置定时计划，不自动重试。Worker 内置 `solo-runtime==1.0.0`，任务以 `root` 租户运行。
 
 工作流仅接收 `input_file`，例如 `/shared/runs/<run-id>/input.json`。输入包含全部运行参数、候选 wheel、锁文件和输出路径；不得含密钥。正式调用前准备该次任务的 `environment/pyproject.toml` 和 `environment/uv.lock`，不使用项目可变源码目录。Runtime 按锁文件安装独立依赖并启动任务环境中的 scheme；scheme 核对版本、wheel 哈希及接口，写出 Parquet 和 `run.json`，Runtime 核验完成清单和报告哈希。每次运行使用独立任务目录；已有成功报告的输出目录不会被覆盖。
 

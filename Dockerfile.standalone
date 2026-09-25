@@ -25,9 +25,8 @@ COPY --from=runtime-builder /dist /opt/solo-runtime/wheels
 RUN uv pip install --python "${VIRTUAL_ENV}/bin/python" --no-deps /opt/solo-runtime/wheels/*.whl \
     && "${VIRTUAL_ENV}/bin/solo-manage" --help
 
-# 与 Backend/Jupyter 的共享卷使用相同 UID/GID。
-RUN useradd --uid 1000 --gid 100 --create-home --shell /bin/bash solo \
-    && printf '\nexport PATH="/opt/solo-runtime/.venv/bin:/usr/local/bin:$PATH"\nexport UV_PYTHON_INSTALL_DIR=/opt/solo-runtime/python\nexport UV_PYTHON_PREFERENCE=only-managed\nexport UV_LINK_MODE=copy\numask 0002\n' \
+# 研究任务与 Backend/Jupyter 一样使用 root。
+RUN printf '\nexport PATH="/opt/solo-runtime/.venv/bin:/usr/local/bin:$PATH"\nexport UV_PYTHON_INSTALL_DIR=/opt/solo-runtime/python\nexport UV_PYTHON_PREFERENCE=only-managed\nexport UV_LINK_MODE=copy\numask 0002\n' \
         >> /opt/dolphinscheduler/conf/dolphinscheduler_env.sh \
     && sed -i 's|^shell.env_source_list=.*$|shell.env_source_list=/opt/dolphinscheduler/conf/dolphinscheduler_env.sh|' \
         /opt/dolphinscheduler/conf/common.properties \

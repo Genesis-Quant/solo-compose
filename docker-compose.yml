@@ -67,8 +67,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    user: "1000:100"
+    user: root
     environment:
+      HOME: /home/jovyan
       PGSQL_HOST: host.docker.internal
       PGSQL_PORT: ${PGSQL_PORT:-5432}
       PGSQL_USER: ${PGSQL_USER:?Set PGSQL_USER in .env}
@@ -86,7 +87,7 @@ services:
       SOLO_SHARED_DIR: /shared
       JUPYTER_URL: ${JUPYTER_URL:-http://127.0.0.1:8888}
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITEE_TOKEN: ${GITEE_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -97,6 +98,8 @@ services:
       - ./backend:/workspace/backend
       - solo-projects:/shared/projects
       - solo-runs:/shared/runs
+      - jupyter-python:/home/jovyan/.python
+      - ./jupyter/config/kernels:/home/jovyan/.jupyter/kernels
     depends_on:
       jupyter:
         condition: service_healthy
@@ -144,26 +147,34 @@ services:
         http_proxy: ${BUILD_HTTP_PROXY:-}
         https_proxy: ${BUILD_HTTPS_PROXY:-}
     user: root
+    entrypoint: ["tini", "-g", "--"]
     working_dir: /shared/projects
     command:
       - bash
       - -ec
       - |
+        umask 0002
         chmod 2770 /shared/projects /shared/runs
         chmod 700 /home/jovyan/.local/share/keyrings /home/jovyan/.codex
-        exec start-jupyter.sh --ServerApp.root_dir=/shared --ServerApp.default_url=/lab
+        exec start-jupyter.sh --allow-root --ServerApp.root_dir=/shared --ServerApp.default_url=/lab
     mem_limit: 4096m
     memswap_limit: 4096m
     environment:
-      NB_UID: "1000"
-      NB_GID: "100"
-      CHOWN_HOME: "yes"
-      CHOWN_HOME_OPTS: "-R"
-      CHOWN_EXTRA: /shared/projects,/shared/runs
-      NB_UMASK: "0002"
-      JUPYTER_PATH: /shared/projects/.jupyter
-      JP_LSP_VIRTUAL_DIR: /shared/projects/.virtual_documents
+      HOME: /home/jovyan
+      JUPYTER_PATH: /home/jovyan/.jupyter
+      JP_LSP_VIRTUAL_DIR: /home/jovyan/.virtual_documents
+      UV_PYTHON_INSTALL_DIR: /home/jovyan/.python
+      SOLO_BACKEND_URL: http://backend:8000
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
+      DOLPHIN_HOST: ${DOLPHIN_HOST:?Set DOLPHIN_HOST in .env}
+      DOLPHIN_PORT: ${DOLPHIN_PORT:-8848}
+      DOLPHIN_RUNTIME_USERNAME: ${DOLPHIN_RUNTIME_USERNAME:?Set DolphinDB username in .env}
+      DOLPHIN_RUNTIME_PASSWORD: ${DOLPHIN_RUNTIME_PASSWORD:?Set DolphinDB password in .env}
+      DOLPHIN_CORE_DATABASE: ${DOLPHIN_CORE_DATABASE:-dfs://CoreData}
+      DOLPHIN_CORE_TABLE: ${DOLPHIN_CORE_TABLE:-coreData}
+      DOLPHIN_SNAPSHOT_DATABASE: ${DOLPHIN_SNAPSHOT_DATABASE:-dfs://StockSnapshot}
+      DOLPHIN_SNAPSHOT_TABLE: ${DOLPHIN_SNAPSHOT_TABLE:-snapshot}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
       SOLO_SHARED_DIR: /shared
       HTTP_PROXY: ${JUPYTER_HTTP_PROXY:-}
       HTTPS_PROXY: ${JUPYTER_HTTPS_PROXY:-}
@@ -176,6 +187,8 @@ services:
       - solo-projects:/shared/projects
       - solo-runs:/shared/runs
       - ./jupyter/config:/home/jovyan/.jupyter
+      - jupyter-python:/home/jovyan/.python
+      - jupyter-virtual-documents:/home/jovyan/.virtual_documents
       - jupyter-keyrings:/home/jovyan/.local/share/keyrings
       - codex-home:/home/jovyan/.codex
       - ./jupyter/config/nbconvert/templates/latex/index.tex.j2:/opt/conda/share/jupyter/nbconvert/templates/latex/index.tex.j2:ro
@@ -194,6 +207,8 @@ volumes:
   solo-projects:
   solo-runs:
   jupyter-keyrings:
+  jupyter-python:
+  jupyter-virtual-documents:
   codex-home:
   dolphinscheduler-resources:
   dolphinscheduler-logs:

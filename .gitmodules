@@ -1,18 +1,18 @@
 [submodule "backend"]
 	path = backend
-	url = https://github.com/Genesis-Quant/solo-backend.git
+	url = https://gitee.com/genesis-quant/solo-backend.git
 [submodule "frontend"]
 	path = frontend
-	url = https://github.com/Genesis-Quant/solo-frontend.git
+	url = https://gitee.com/genesis-quant/solo-frontend.git
 [submodule "backtest"]
 	path = backtest
-	url = https://github.com/Genesis-Quant/backtest.git
+	url = https://gitee.com/genesis-quant/backtest.git
 [submodule "algos"]
 	path = algos
-	url = https://github.com/Genesis-Quant/solo-algos.git
+	url = https://gitee.com/genesis-quant/solo-algos.git
 [submodule "jupyter"]
 	path = jupyter
-	url = https://github.com/Genesis-Quant/solo-jupyter.git
+	url = https://gitee.com/genesis-quant/solo-jupyter.git
 [submodule "runtime"]
 	path = runtime
-	url = https://github.com/Genesis-Quant/solo-runtime.git
+	url = https://gitee.com/genesis-quant/solo-runtime.git
