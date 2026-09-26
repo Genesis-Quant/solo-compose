@@ -68,10 +68,10 @@ docker compose up -d --build --wait
 
 根目录 Compose 启动 Backend、Frontend、Jupyter 和 DolphinScheduler 3.2.2 单机服务，使用 Solo 自己的 Docker 网络。项目管理已连接 PostgreSQL；报告组件保留固定示例。调度层已接入 Runtime，Jupyter 插件的研究提交界面尚未接入。
 
-`runtime/` 仅负责准备任务环境、启动子进程和核验完成清单；因子分析和策略回测实现位于 `algos/scheme/`。
-Jupyter 通过 `scheme.apps` 调用研究 SDK；Worker 使用 `solo-manage run --input-file ...` 启动任务，
+`runtime/src/solo_runtime/apps` 提供五类项目及策略组装的六个任务入口；各入口准备任务环境、启动对应 Scheme 计算并核验完成清单。
+Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage apps <应用名> --input-file ...` 启动对应任务，
 报告写入共享目录。任务环境、包版本和 wheel 校验规则见 [Runtime README](runtime/README.md)，
-输入示例见 [factor.json](runtime/examples/factor.json)、[backtest.json](runtime/examples/backtest.json)。
+输入示例见 [factor.json](runtime/examples/factor.json)、[strategy.json](runtime/examples/strategy.json)。
 
 ## 创建研究项目
 
@@ -106,7 +106,7 @@ Backend 和 Jupyter 均以 root 运行，无独立初始化服务。Jupyter 直�
 
 部署方式与 Arena 一致：3.2.2 standalone + PostgreSQL。Solo 使用 `solo_ds`，宿主机 API 端口 `12346`、Python Gateway 端口 `25334`，容器内端口仍为 `12345 / 25333`。`dolphinscheduler-schema-initializer` 仅初始化/升级 DS 数据库表，完成后退出；共享目录仍由 Jupyter 设置权限，没有共享目录 init 服务。
 
-Backend 启动时通过 Python Gateway 同步 `solo-runtime` 项目下的 `factor`、`backtest` 两个工作流。两者均为手动触发的单 Shell 任务，不设置定时计划，不自动重试。Worker 内置 `solo-runtime==1.0.0`，任务以 `root` 租户运行。
+Backend 启动时通过 Python Gateway 同步 `solo-runtime` 项目下的 `factor`、`model`、`optimize`、`control`、`execution`、`strategy` 六个工作流，与 Runtime apps 一一对应。它们均为手动触发的单 Shell 任务，不设置定时计划，不自动重试。Worker 内置 `solo-runtime==1.0.0`，任务以 `root` 租户运行。
 
 工作流仅接收 `input_file`，例如 `/shared/runs/<run-id>/input.json`。输入包含全部运行参数、候选 wheel、锁文件和输出路径；不得含密钥。正式调用前准备该次任务的 `environment/pyproject.toml` 和 `environment/uv.lock`，不使用项目可变源码目录。Runtime 按锁文件安装独立依赖并启动任务环境中的 scheme；scheme 核对版本、wheel 哈希及接口，写出 Parquet 和 `run.json`，Runtime 核验完成清单和报告哈希。每次运行使用独立任务目录；已有成功报告的输出目录不会被覆盖。
 
@@ -116,7 +116,7 @@ docker compose exec backend python -m core.scheduler sync
 
 # 提交任务
 docker compose exec backend python -m core.scheduler start factor --input-file /shared/runs/<run-id>/input.json
-docker compose exec backend python -m core.scheduler start backtest --input-file /shared/runs/<run-id>/input.json
+docker compose exec backend python -m core.scheduler start strategy --input-file /shared/runs/<run-id>/input.json
 
 # 查询实例、任务和日志（ID 取自上一条查询）
 docker compose exec backend python -m core.scheduler instances factor
@@ -127,6 +127,8 @@ docker compose exec backend python -m core.scheduler log <task-id> --offset 0 --
 ```
 
 调度日志通过 DS API 获取，不另存业务日志表。
+
+策略组装固定选中的 Algo 版本和 Model 成果中的 Scheme 来源，按包的依赖声明解析公共依赖并生成独立锁文件。当前使用 Scheme 1.0.0 接口，不提供历史接口适配、Scheme 替换或任务类型转换。报告必须明确提供 `report_kind`，`input.kind` 必须与实际项目类型一致。
 
 ## 更新组件
 
