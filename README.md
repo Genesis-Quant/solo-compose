@@ -73,7 +73,7 @@ Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage ap
 
 项目目录为 `/shared/projects/<项目类型>/<项目名>/`，例如 `/shared/projects/model/动量策略/`。同类项目名称不能重复；名称修改会同步移动目录并重建环境，删除项目只隐藏记录，目录保留。
 
-创建项目时先选择 Scheme 版本，再选择同大版本的 Algo 模板版本。后端记录双方 Tag/commit；发布依赖声明整个 Scheme 大版本范围，项目 uv source 与锁文件固定实际使用的 commit。前端按运行清单中的实际 Scheme 大版本选择报告适配器，未知版本不回退解释。
+创建项目时先选择 Scheme 版本，再选择同大版本且最低版本要求已满足的 Algo 模板。后端记录双方 Tag/commit；发布依赖声明最低兼容版本和下一大版本上界，例如新模板要求 `scheme>=1.1.0,<2.0.0`，项目 uv source 与锁文件固定实际使用的 commit。前端按运行清单中的实际 Scheme 大版本选择报告适配器，未知版本不回退解释。
 
 项目根目录 `.solo` 是供插件读取的 JSON 文件，字段为 `project_id`、`name`、`kind`、`scheme_version`、`scheme_commit`、`algo_version`、`algo_commit`；项目 ID 在改名后保持不变。每个项目保存独立 `.venv`、`uv.lock`。Python 解释器保存在 `/home/jovyan/.python`，Kernel 注册信息保存在 `/home/jovyan/.jupyter/kernels`，代码补全临时文件保存在 `/home/jovyan/.virtual_documents`；通过卷挂载在容器重建后保留，不占用 `projects` 目录。
 
@@ -122,7 +122,7 @@ docker compose exec backend python -m core.scheduler log <task-id> --offset 0 --
 
 调度日志只通过 DS API 获取，Backend 不挂载或直接读取调度器日志卷，也不另存业务日志表。Worker 用 Compose 服务名 `dolphinscheduler-standalone:1234` 注册地址，新任务不再记录会随容器重建变化的 IP。已有任务记录中的旧 IP 不会被该配置改写；如果旧地址失效，应通过调度器运维恢复原日志服务，而不是由 Backend 绕过接口读文件或静默改写调度数据库。
 
-策略组装固定选中的 Algo 版本和 Model 成果中的 Scheme 来源，按包的依赖声明解析公共依赖并生成独立锁文件。当前使用 Scheme 1.0.0 接口，不提供历史接口适配、Scheme 替换或任务类型转换。报告必须明确提供 `report_kind`，`input.kind` 必须与实际项目类型一致。
+策略组装固定选中的 Algo 版本和 Model 成果中的 Scheme 来源，按包的依赖声明解析公共依赖并生成独立锁文件。新模板使用 Scheme 1.1.0 参数接口；已有成果继续使用冻结的 Scheme，不提供自动源码迁移、Scheme 替换或任务类型转换。报告必须明确提供 `report_kind`，`input.kind` 必须与实际项目类型一致。
 
 ## 更新组件
 
