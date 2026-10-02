@@ -31,6 +31,7 @@ services:
       MASTER_SERVER_LOAD_PROTECTION_ENABLED: "false"
       WORKER_SERVER_LOAD_PROTECTION_ENABLED: "false"
       WORKER_TENANT_CONFIG_DEFAULT_TENANT_ENABLED: "true"
+      WORKER_WORKERADDRESS: dolphinscheduler-standalone:1234
       DOLPHIN_HOST: ${DOLPHIN_HOST:?Set DOLPHIN_HOST in .env}
       DOLPHIN_PORT: ${DOLPHIN_PORT:-8848}
       DOLPHIN_RUNTIME_USERNAME: ${DOLPHIN_RUNTIME_USERNAME:?Set DolphinDB username in .env}
@@ -156,7 +157,14 @@ services:
         umask 0002
         chmod 2770 /shared/projects /shared/runs
         chmod 700 /home/jovyan/.local/share/keyrings /home/jovyan/.codex
-        exec start-jupyter.sh --allow-root --ServerApp.root_dir=/shared --ServerApp.default_url=/lab
+        exec dbus-run-session -- bash -euc '
+          printf "%s" "$$JUPYTER_KEYRING_PASSWORD" |
+            gnome-keyring-daemon --unlock --components=secrets --daemonize >/dev/null
+          export PYTHON_KEYRING_BACKEND=keyring.backends.SecretService.Keyring
+          unset JUPYTER_KEYRING_PASSWORD
+          python -B -c "import secretstorage, sys; sys.exit(secretstorage.get_default_collection(secretstorage.dbus_init()).is_locked())"
+          exec start-notebook.py --allow-root --ServerApp.root_dir=/shared --ServerApp.default_url=/lab
+        '
     mem_limit: 4096m
     memswap_limit: 4096m
     environment:
@@ -166,6 +174,7 @@ services:
       UV_PYTHON_INSTALL_DIR: /home/jovyan/.python
       SOLO_BACKEND_URL: http://backend:8000
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
+      JUPYTER_KEYRING_PASSWORD: ${JUPYTER_KEYRING_PASSWORD:?Set JUPYTER_KEYRING_PASSWORD in .env}
       DOLPHIN_HOST: ${DOLPHIN_HOST:?Set DOLPHIN_HOST in .env}
       DOLPHIN_PORT: ${DOLPHIN_PORT:-8848}
       DOLPHIN_RUNTIME_USERNAME: ${DOLPHIN_RUNTIME_USERNAME:?Set DolphinDB username in .env}
@@ -193,8 +202,6 @@ services:
       - codex-home:/home/jovyan/.codex
       - ./jupyter/config/nbconvert/templates/latex/index.tex.j2:/opt/conda/share/jupyter/nbconvert/templates/latex/index.tex.j2:ro
       - ./jupyter/ipython_config.py:/etc/ipython/ipython_config.py:ro
-    secrets:
-      - jupyter-keyring-password
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/login', timeout=5)"]
       interval: 10s
@@ -212,7 +219,3 @@ volumes:
   codex-home:
   dolphinscheduler-resources:
   dolphinscheduler-logs:
-
-secrets:
-  jupyter-keyring-password:
-    file: ./.secrets/jupyter-keyring-password

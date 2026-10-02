@@ -44,15 +44,9 @@ git submodule update --init --recursive
 
 使用 Docker Desktop / WSL2。连接本机现有 PostgreSQL 容器，提前创建 `solo`、`solo_ds` 数据库并配置访问账号。
 
-复制 `.env.example` 为 `.env`，填写 PostgreSQL、DolphinDB、DolphinScheduler 凭据和 `JUPYTER_TOKEN`。DolphinScheduler 登录密码使用 16 位随机字符，Gateway token 使用独立长随机值。首次启动还需生成 Jupyter 凭据库密钥（PowerShell）：
+复制 `.env.example` 为 `.env`，填写 PostgreSQL、DolphinDB、DolphinScheduler 凭据、`JUPYTER_TOKEN` 和 `JUPYTER_KEYRING_PASSWORD`。DolphinScheduler 登录密码使用 16 位随机字符，Gateway token 和首次创建凭据库的解锁密码使用独立长随机值。已有加密凭据库必须沿用原解锁密码，不能重新生成。所有本地凭据统一放在 `.env`，不需要额外的密码目录或文件。Compose 在同一个 D-Bus 会话中解锁凭据库，然后直接启动镜像原生的 `start-notebook.py`。
 
-```powershell
-New-Item -ItemType Directory -Force .secrets | Out-Null
-if (-not (Test-Path .secrets/jupyter-keyring-password)) {
-    $keyringPassword = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
-    [IO.File]::WriteAllText((Join-Path $PWD '.secrets/jupyter-keyring-password'), $keyringPassword)
-}
-```
+迁移已有解锁密码时必须保留原值的全部字节，包括原本参与解锁的换行；可在 `.env` 的双引号值中用 `\r`、`\n` 转义表示，不要去除它们。
 
 如构建需要代理，在 `.env` 中设置 `BUILD_HTTP_PROXY`、`BUILD_HTTPS_PROXY`，例如 `http://host.docker.internal:7897`。Jupyter 运行代理使用独立的 `JUPYTER_HTTP_PROXY`、`JUPYTER_HTTPS_PROXY`，默认留空。然后在根目录执行：
 
@@ -100,7 +94,7 @@ Backend 和 Jupyter 统一使用 `SOLO_SHARED_DIR=/shared`。Jupyter 文件浏�
 
 Backend 和 Jupyter 均以 root 运行，无独立初始化服务。Jupyter 直接启动，不经过镜像切换到 jovyan 的入口脚本，HOME 仍为 `/home/jovyan`，沿用已有配置、凭据库和 Codex 登录状态。命名卷保存在 Docker Desktop 的 Linux 文件系统中，适合项目虚拟环境；不是 Windows 源码目录的映射。Jupyter 配置仍由 `jupyter/config` 持久化。
 
-`docker compose down` 保留数据，`docker compose down -v` 会删除上述命名卷。备份加密凭据库时同时保存 `.secrets/jupyter-keyring-password`，已有密钥不要重新生成。`.env` 和 `.secrets` 均不提交到 Git。
+`docker compose down` 保留数据，`docker compose down -v` 会删除上述命名卷。备份加密凭据库时同时保存 `.env` 中的 `JUPYTER_KEYRING_PASSWORD`，已有解锁密码不要重新生成。`.env` 不提交到 Git，并应限制宿主机读取权限；通过环境变量传入的凭据可被有 Docker 管理权限的人查看。
 
 ## DolphinScheduler 工作流
 
@@ -126,7 +120,7 @@ docker compose exec backend python -m core.scheduler log <task-id> --offset 0 --
 
 ```
 
-调度日志通过 DS API 获取，不另存业务日志表。
+调度日志只通过 DS API 获取，Backend 不挂载或直接读取调度器日志卷，也不另存业务日志表。Worker 用 Compose 服务名 `dolphinscheduler-standalone:1234` 注册地址，新任务不再记录会随容器重建变化的 IP。已有任务记录中的旧 IP 不会被该配置改写；如果旧地址失效，应通过调度器运维恢复原日志服务，而不是由 Backend 绕过接口读文件或静默改写调度数据库。
 
 策略组装固定选中的 Algo 版本和 Model 成果中的 Scheme 来源，按包的依赖声明解析公共依赖并生成独立锁文件。当前使用 Scheme 1.0.0 接口，不提供历史接口适配、Scheme 替换或任务类型转换。报告必须明确提供 `report_kind`，`input.kind` 必须与实际项目类型一致。
 
