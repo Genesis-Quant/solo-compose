@@ -60,7 +60,7 @@ docker compose up -d --build --wait
 - Jupyter：<http://127.0.0.1:8888/lab>，使用根目录 `.env` 中的 `JUPYTER_TOKEN` 登录。
 - DolphinScheduler：<http://127.0.0.1:12346/dolphinscheduler/ui>，使用 `.env` 中的 `DOLPHINSCHEDULER_USERNAME/PASSWORD` 登录。
 
-根目录 Compose 启动 Backend、Frontend、Jupyter 和 DolphinScheduler 3.2.2 单机服务，使用 Solo 自己的 Docker 网络。项目管理已连接 PostgreSQL；报告组件保留固定示例。调度层已接入 Runtime，Jupyter 插件的研究提交界面尚未接入。
+根目录 Compose 启动 Backend、Frontend、Jupyter 和 DolphinScheduler 3.2.2 单机服务，使用 Solo 自己的 Docker 网络。项目管理、Jupyter 研究提交、策略组装与任务记录已连接 Backend；报告读取真实运行清单及其声明的 Parquet，不用示例数据替代研究结果。
 
 `runtime/src/solo_runtime/apps` 提供五类项目及策略组装的六个任务入口；各入口准备任务环境、启动对应 Scheme 计算并核验完成清单。
 Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage apps <应用名> --input-file ...` 启动对应任务，
@@ -73,11 +73,21 @@ Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage ap
 
 项目目录为 `/shared/projects/<项目类型>/<项目名>/`，例如 `/shared/projects/model/动量策略/`。同类项目名称不能重复；名称修改会同步移动目录并重建环境，删除项目只隐藏记录，目录保留。
 
-创建项目时先选择 Scheme 版本，再选择同大版本且最低版本要求已满足的 Algo 模板。后端记录双方 Tag/commit；发布依赖声明最低兼容版本和下一大版本上界，例如新模板要求 `scheme>=1.1.0,<2.0.0`，项目 uv source 与锁文件固定实际使用的 commit。前端按运行清单中的实际 Scheme 大版本选择报告适配器，未知版本不回退解释。
+创建项目时先选择 Scheme 版本，再选择主版本、次版本均一致的 Algo 模板，补丁版本不必相同。项目间安装和策略组装也遵循同一规则，例如 1.2.0 与 1.2.7 可互调，不能混用 1.1.x 或 1.3.x。后端记录双方 Tag/commit；发布依赖覆盖整个补丁系列，如 `scheme>=1.2.0,<1.3.0`，不限定更高的补丁下界。项目 uv source 与锁文件仍精确固定实际使用的 commit，不自动升级已有环境。前端报告继续按运行清单中的 Scheme **主版本**选择适配器，未知主版本不回退解释。
 
 项目根目录 `.solo` 是供插件读取的 JSON 文件，字段为 `project_id`、`name`、`kind`、`scheme_version`、`scheme_commit`、`algo_version`、`algo_commit`；项目 ID 在改名后保持不变。每个项目保存独立 `.venv`、`uv.lock`。Python 解释器保存在 `/home/jovyan/.python`，Kernel 注册信息保存在 `/home/jovyan/.jupyter/kernels`，代码补全临时文件保存在 `/home/jovyan/.virtual_documents`；通过卷挂载在容器重建后保留，不占用 `projects` 目录。
 
 `GITEE_TOKEN` 可选；`JUPYTER_URL` 是浏览器访问 Jupyter 的地址，修改端口时需同步调整。首次创建需要下载 Python 与依赖，安装失败时页面显示错误并清理未完成的项目目录。
+
+## 版本退役
+
+退役政策唯一来源为 [backend/version-policy.json](backend/version-policy.json)，通过 `GET /api/v1/version-policy` 查询。Scheme 0.1.0、1.0.0、1.0.1、1.1.0 与 Algo 模板 0.1.0、1.0.0、1.0.1 已退役；新项目使用 Scheme / Algo 1.2.0 及满足契约的后续版本。退役与主次版本兼容是两个独立条件：同系列也不能新增使用已退役来源。
+
+退役版本不出现在新建、上游安装或策略组装候选中。Backend 在新建、保存、提交与组装入口校验政策，Jupyter 在执行项目表单和安装前调用中央准入接口，Runtime 在安装任务环境前核验 Backend 管理的 Run UUID、输入和锁文件 SHA256，并与提交前保存的数据库哈希匹配；服务不可用或版本来源不明时拒绝执行。旧任务不能用原输入另行重放来绕过退役。
+
+历史项目、Notebook、源码、锁文件、wheel 和报告原样保留，不改为归档，不移动或删除 Git Tag，不自动迁移依赖。历史报告继续按 Scheme 主版本渲染。发布切换时没有未完成任务，政策不启用基于创建时间或 `queued` 状态的例外放行。更新 Jupyter 插件和 Worker 需要构建相应镜像；有正在使用的 Kernel 时不要为了更新直接重启 Jupyter。
+
+上游安装先把已保存源码及所需本地运行时依赖构建为 wheel，保留原始 `Requires-Dist`，不继承上游 `tool.uv.sources.scheme`，不使用 Scheme override 覆盖依赖要求。完整安装在隔离环境解析与验证后才提交；当前 Scheme source 和实际补丁版本保持不变，提交失败恢复配置、锁文件及原 `.venv`。
 
 ## 共享目录
 
@@ -100,7 +110,7 @@ Backend 和 Jupyter 均以 root 运行，无独立初始化服务。Jupyter 直�
 
 部署方式与 Arena 一致：3.2.2 standalone + PostgreSQL。Solo 使用 `solo_ds`，宿主机 API 端口 `12346`、Python Gateway 端口 `25334`，容器内端口仍为 `12345 / 25333`。`dolphinscheduler-schema-initializer` 仅初始化/升级 DS 数据库表，完成后退出；共享目录仍由 Jupyter 设置权限，没有共享目录 init 服务。
 
-Backend 启动时通过 Python Gateway 同步 `solo-runtime` 项目下的 `factor`、`model`、`optimize`、`control`、`execution`、`strategy` 六个工作流，与 Runtime apps 一一对应。它们均为手动触发的单 Shell 任务，不设置定时计划，不自动重试。Worker 内置 `solo-runtime==1.0.0`，任务以 `root` 租户运行。
+Backend 启动时通过 Python Gateway 同步 `solo-runtime` 项目下的 `factor`、`model`、`optimize`、`control`、`execution`、`strategy` 六个工作流，与 Runtime apps 一一对应。它们均为手动触发的单 Shell 任务，不设置定时计划，不自动重试。Worker 内置 `solo-runtime==1.1.0`，任务以 `root` 租户运行，并通过 `SOLO_BACKEND_URL=http://backend:8000` 查询执行准入。
 
 工作流仅接收 `input_file`，例如 `/shared/runs/<run-id>/input.json`。输入包含全部运行参数、候选 wheel、锁文件和输出路径；不得含密钥。正式调用前准备该次任务的 `environment/pyproject.toml` 和 `environment/uv.lock`，不使用项目可变源码目录。Runtime 按锁文件安装独立依赖并启动任务环境中的 scheme；scheme 核对版本、wheel 哈希及接口，写出 Parquet 和 `run.json`，Runtime 核验完成清单和报告哈希。每次运行使用独立任务目录；已有成功报告的输出目录不会被覆盖。
 
@@ -122,7 +132,7 @@ docker compose exec backend python -m core.scheduler log <task-id> --offset 0 --
 
 调度日志只通过 DS API 获取，Backend 不挂载或直接读取调度器日志卷，也不另存业务日志表。Worker 用 Compose 服务名 `dolphinscheduler-standalone:1234` 注册地址，新任务不再记录会随容器重建变化的 IP。已有任务记录中的旧 IP 不会被该配置改写；如果旧地址失效，应通过调度器运维恢复原日志服务，而不是由 Backend 绕过接口读文件或静默改写调度数据库。
 
-策略组装固定选中的 Algo 版本和 Model 成果中的 Scheme 来源，按包的依赖声明解析公共依赖并生成独立锁文件。新模板使用 Scheme 1.1.0 参数接口；已有成果继续使用冻结的 Scheme，不提供自动源码迁移、Scheme 替换或任务类型转换。报告必须明确提供 `report_kind`，`input.kind` 必须与实际项目类型一致。
+策略组装固定选中的 Algo 版本和 Model 成果中的 Scheme 来源，按包的依赖声明解析公共依赖并生成独立锁文件。新模板使用 Scheme 1.2.0 参数与版本契约；已有成果保留冻结的 Scheme 和报告，退役来源不能用于新策略，不提供自动源码迁移、Scheme 替换或任务类型转换。报告必须明确提供 `report_kind`，`input.kind` 必须与实际项目类型一致。
 
 ## 更新组件
 

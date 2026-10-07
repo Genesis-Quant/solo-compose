@@ -18,7 +18,7 @@ services:
     restart: "no"
 
   dolphinscheduler-standalone:
-    image: solo/dolphinscheduler-standalone:3.2.2-runtime-1.0.0
+    image: solo/dolphinscheduler-standalone:3.2.2-runtime-1.1.0
     build:
       context: .
       dockerfile: Dockerfile.standalone
@@ -27,6 +27,7 @@ services:
       TZ: Asia/Shanghai
       SPRING_JACKSON_TIME_ZONE: UTC
       API_PYTHON_GATEWAY_ENABLED: "true"
+      SOLO_BACKEND_URL: http://backend:8000
       API_PYTHON_GATEWAY_AUTH_TOKEN: ${DOLPHINSCHEDULER_PYTHON_GATEWAY_TOKEN:?Set DolphinScheduler gateway token in .env}
       MASTER_SERVER_LOAD_PROTECTION_ENABLED: "false"
       WORKER_SERVER_LOAD_PROTECTION_ENABLED: "false"

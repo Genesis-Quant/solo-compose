@@ -34,7 +34,7 @@ RUN printf '\nexport PATH="/opt/solo-runtime/.venv/bin:/usr/local/bin:$PATH"\nex
         'Defaults env_keep += "DOLPHIN_HOST DOLPHIN_PORT DOLPHIN_RUNTIME_USERNAME DOLPHIN_RUNTIME_PASSWORD"' \
         'Defaults env_keep += "DOLPHIN_CORE_DATABASE DOLPHIN_CORE_TABLE DOLPHIN_SNAPSHOT_DATABASE DOLPHIN_SNAPSHOT_TABLE"' \
         'Defaults env_keep += "UV_DEFAULT_INDEX UV_PYTHON_INSTALL_MIRROR"' \
-        'Defaults env_keep += "TUSHARE_TOKEN"' \
+        'Defaults env_keep += "TUSHARE_TOKEN SOLO_BACKEND_URL"' \
         > /etc/sudoers.d/solo-runtime-env \
     && chmod 0440 /etc/sudoers.d/solo-runtime-env \
     && visudo -cf /etc/sudoers.d/solo-runtime-env
