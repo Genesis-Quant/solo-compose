@@ -13,7 +13,8 @@ algos/*
 !algos/scheme
 backtest
 mvp
-jupyter
+jupyter/*
+!jupyter/uv.toml
 **/.test-runs
 **/.venv
 **/__pycache__

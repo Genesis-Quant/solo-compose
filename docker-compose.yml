@@ -24,10 +24,13 @@ services:
       dockerfile: Dockerfile.standalone
     environment:
       <<: *dolphinscheduler-environment
+      MYBATISPLUS_CONFIGURATION_DATABASEID: PostgreSQL
       TZ: Asia/Shanghai
       SPRING_JACKSON_TIME_ZONE: UTC
       API_PYTHON_GATEWAY_ENABLED: "true"
       SOLO_BACKEND_URL: http://backend:8000
+      UV_LINK_MODE: hardlink
+      UV_CACHE_DIR: /shared/runs/.uv-cache
       API_PYTHON_GATEWAY_AUTH_TOKEN: ${DOLPHINSCHEDULER_PYTHON_GATEWAY_TOKEN:?Set DolphinScheduler gateway token in .env}
       MASTER_SERVER_LOAD_PROTECTION_ENABLED: "false"
       WORKER_SERVER_LOAD_PROTECTION_ENABLED: "false"
@@ -87,7 +90,10 @@ services:
       DOLPHINSCHEDULER_PYTHON_GATEWAY_TOKEN: ${DOLPHINSCHEDULER_PYTHON_GATEWAY_TOKEN:?Set DolphinScheduler gateway token in .env}
       SOLO_WEB_ORIGINS: ${SOLO_WEB_ORIGINS:-http://127.0.0.1:5174,http://localhost:5174}
       SOLO_SHARED_DIR: /shared
+      UV_LINK_MODE: hardlink
+      UV_CACHE_DIR: /shared/projects/.uv-cache
       JUPYTER_URL: ${JUPYTER_URL:-http://127.0.0.1:8888}
+      JUPYTER_API_URL: http://jupyter:8888
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
       GITEE_TOKEN: ${GITEE_TOKEN:-}
     extra_hosts:
@@ -100,6 +106,7 @@ services:
       - ./backend:/workspace/backend
       - solo-projects:/shared/projects
       - solo-runs:/shared/runs
+      - solo-artifacts:/shared/artifacts
       - jupyter-python:/home/jovyan/.python
       - ./jupyter/config/kernels:/home/jovyan/.jupyter/kernels
     depends_on:
@@ -173,6 +180,8 @@ services:
       JUPYTER_PATH: /home/jovyan/.jupyter
       JP_LSP_VIRTUAL_DIR: /home/jovyan/.virtual_documents
       UV_PYTHON_INSTALL_DIR: /home/jovyan/.python
+      UV_LINK_MODE: hardlink
+      UV_CACHE_DIR: /shared/projects/.uv-cache
       SOLO_BACKEND_URL: http://backend:8000
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
       JUPYTER_KEYRING_PASSWORD: ${JUPYTER_KEYRING_PASSWORD:?Set JUPYTER_KEYRING_PASSWORD in .env}
@@ -214,6 +223,7 @@ services:
 volumes:
   solo-projects:
   solo-runs:
+  solo-artifacts:
   jupyter-keyrings:
   jupyter-python:
   jupyter-virtual-documents:

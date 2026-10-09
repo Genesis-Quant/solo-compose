@@ -64,20 +64,29 @@ docker compose up -d --build --wait
 
 `runtime/src/solo_runtime/apps` 提供五类项目及策略组装的六个任务入口；各入口准备任务环境、启动对应 Scheme 计算并核验完成清单。
 Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage apps <应用名> --input-file ...` 启动对应任务，
-报告写入共享目录。任务环境、包版本和 wheel 校验规则见 [Runtime README](runtime/README.md)，
-输入示例见 [factor.json](runtime/examples/factor.json)、[strategy.json](runtime/examples/strategy.json)。
+报告写入共享目录。任务环境、包版本和 wheel 校验规则见 [Runtime README](runtime/README.md)。
+
+Python 包默认使用清华镜像 `https://pypi.tuna.tsinghua.edu.cn/simple`，Jupyter 与 Worker 镜像共用 [jupyter/uv.toml](jupyter/uv.toml)。依赖安装使用 uv 硬链接；项目、任务和发布检查环境分别使用所属卷根目录的 `.uv-cache`，使缓存与 `.venv` 位于同一文件系统。删除缓存目录不会破坏已安装的硬链接文件；研究 wheel 仍按原始字节独立冻结。保存研究版本时，新运行环境保留项目的索引配置；策略组装保留 Model 成果的 registry 索引，并合并本次生成的本地 wheel 索引。镜像地址必须在生成 `uv.lock` 前生效；Worker 按冻结锁安装，不能靠修改 `UV_DEFAULT_INDEX` 替换旧锁中的下载地址。已提交任务的输入、锁文件和哈希保持不变，修正来源后应保存新版本。
 
 ## 创建研究项目
 
 前端选择项目类型、填写名称并选择 `solo-algos` 仓库的 Git Tag。后端按 Tag 对应的 commit 下载模板，生成独立包名和模块名，执行 `uv sync` 安装项目依赖，注册独立 Kernel 后保存项目记录。创建成功后点击“打开 Jupyter”，直接进入项目的 `research.ipynb`。
 
-项目目录为 `/shared/projects/<项目类型>/<项目名>/`，例如 `/shared/projects/model/动量策略/`。同类项目名称不能重复；名称修改会同步移动目录并重建环境，删除项目只隐藏记录，目录保留。
+项目目录为 `/shared/projects/<项目类型>/<项目名>/`，例如 `/shared/projects/model/动量策略/`。同类项目名称不能重复；名称修改会同步移动目录并重建环境。删除项目会真正删除项目、所属研究任务和报告、冻结环境、专属 Kernel 及准确匹配的调度实例，默认同时删除工作区并释放名称。取消勾选删除工作区只保留物理目录，该目录仍会阻止同名覆盖。已发布成果和独立下游任务不随源项目删除；部分清理失败按原项目 UUID 重试，不访问后来创建的同名项目。
 
 创建项目时先选择 Scheme 版本，再选择主版本、次版本均一致的 Algo 模板，补丁版本不必相同。项目间安装和策略组装也遵循同一规则，例如 1.2.0 与 1.2.7 可互调，不能混用 1.1.x 或 1.3.x。后端记录双方 Tag/commit；发布依赖覆盖整个补丁系列，如 `scheme>=1.2.0,<1.3.0`，不限定更高的补丁下界。项目 uv source 与锁文件仍精确固定实际使用的 commit，不自动升级已有环境。前端报告继续按运行清单中的 Scheme **主版本**选择适配器，未知主版本不回退解释。
 
-项目根目录 `.solo` 是供插件读取的 JSON 文件，字段为 `project_id`、`name`、`kind`、`scheme_version`、`scheme_commit`、`algo_version`、`algo_commit`；项目 ID 在改名后保持不变。每个项目保存独立 `.venv`、`uv.lock`。Python 解释器保存在 `/home/jovyan/.python`，Kernel 注册信息保存在 `/home/jovyan/.jupyter/kernels`，代码补全临时文件保存在 `/home/jovyan/.virtual_documents`；通过卷挂载在容器重建后保留，不占用 `projects` 目录。
+项目根目录 `.solo` 是供插件读取的 JSON 文件，字段包括 `project_id`、`package_name`、`name`、`kind`、`scheme_version`、`scheme_commit`、`algo_version`、`algo_commit` 和 `template_package_version`；项目 ID 与包身份在改名后保持不变。同名重建会分配新 UUID 和包身份，不复用仍被独立产物占用的包名。每个项目保存独立 `.venv`、`uv.lock`。Python 解释器保存在 `/home/jovyan/.python`，Kernel 注册信息保存在 `/home/jovyan/.jupyter/kernels`，代码补全临时文件保存在 `/home/jovyan/.virtual_documents`；通过卷挂载在容器重建后保留，不占用 `projects` 目录。
 
 `GITEE_TOKEN` 可选；`JUPYTER_URL` 是浏览器访问 Jupyter 的地址，修改端口时需同步调整。首次创建需要下载 Python 与依赖，安装失败时页面显示错误并清理未完成的项目目录。
+
+## 独立发布成果
+
+研究成功后点击“发布版本”，通过真实发布接口将准确 wheel、来源快照和依赖闭包封存到独立产物库。“发布成果”侧栏入口提供真实文件大小、SHA256、下载和删除操作；Jupyter 安装与策略组装按产物 UUID 选择，不以源项目是否存在作为依赖身份。注册候选 wheel 不等于发布，同一已发布 package/version 不允许更换字节。
+
+删除成果需要确认准确包版本、文件、SHA256 和成果 UUID，将永久删除该成果的登记记录、原始 wheel 及发布环境，不删除源项目或已有任务自己的冻结副本、输入、锁文件和报告。仍被项目当前依赖、有效安装事务、其他登记产物依赖或尚未接受的策略引用时拒绝删除并说明原因。删除后不能再下载该成果或通过其登记用于新安装、策略组装及重新发布。文件清理部分失败时可按原成果 UUID 重试，不会误删后来登记的同名或同 SHA 成果。
+
+任务提交前保存自己的准确输入、锁文件哈希及 `accepted_artifacts`。删除上游项目不会使已经接受的下游任务失去身份；Worker 只使用该任务自己的冻结副本，并在安装前、执行前和执行后核验本地 wheel 字节。没有引用的未发布产物可以回收，已发布产物及其依赖闭包独立保留。
 
 ## 版本退役
 
@@ -85,9 +94,9 @@ Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage ap
 
 退役版本不出现在新建、上游安装或策略组装候选中。Backend 在新建、保存、提交与组装入口校验政策，Jupyter 在执行项目表单和安装前调用中央准入接口，Runtime 在安装任务环境前核验 Backend 管理的 Run UUID、输入和锁文件 SHA256，并与提交前保存的数据库哈希匹配；服务不可用或版本来源不明时拒绝执行。旧任务不能用原输入另行重放来绕过退役。
 
-历史项目、Notebook、源码、锁文件、wheel 和报告原样保留，不改为归档，不移动或删除 Git Tag，不自动迁移依赖。历史报告继续按 Scheme 主版本渲染。发布切换时没有未完成任务，政策不启用基于创建时间或 `queued` 状态的例外放行。更新 Jupyter 插件和 Worker 需要构建相应镜像；有正在使用的 Kernel 时不要为了更新直接重启 Jupyter。
+退役本身不改写或删除历史项目、Notebook、源码、锁文件、wheel 和报告，不移动或删除 Git Tag，也不自动迁移依赖。用户明确删除项目时按项目生命周期清理所属资源；已发布产物及独立下游保留。仍存在的历史报告继续按 Scheme 主版本渲染。发布切换时没有未完成任务，政策不启用基于创建时间或 `queued` 状态的例外放行。更新 Jupyter 插件和 Worker 需要构建相应镜像；有正在使用的 Kernel 时不要为了更新直接重启 Jupyter。
 
-上游安装先把已保存源码及所需本地运行时依赖构建为 wheel，保留原始 `Requires-Dist`，不继承上游 `tool.uv.sources.scheme`，不使用 Scheme override 覆盖依赖要求。完整安装在隔离环境解析与验证后才提交；当前 Scheme source 和实际补丁版本保持不变，提交失败恢复配置、锁文件及原 `.venv`。
+上游安装先把已保存源码及所需本地运行时依赖构建为 wheel，保留原始 `Requires-Dist`，不继承上游 `tool.uv.sources.scheme`，不使用 Scheme override 覆盖依赖要求。完整安装在隔离环境解析与验证后才提交；当前 Scheme source 和实际补丁版本保持不变，提交失败恢复配置、锁文件及原 `.venv`。最终状态确认断网时保留项目内 `.solo-installation.json`，恢复网络后按原安装 UUID 补偿；已接受回执不按 TTL 丢弃旧依赖引用。
 
 ## 共享目录
 
@@ -95,6 +104,7 @@ Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage ap
 | --- | --- | --- | --- |
 | `solo_solo-projects` | `/shared/projects` | 研究项目源码、Notebook、项目 uv 环境 | Backend、Jupyter，均可读写 |
 | `solo_solo-runs` | `/shared/runs` | 任务输入、wheel、uv.lock、隔离环境和报告 Parquet | Backend、Jupyter、DolphinScheduler Worker，均可读写 |
+| `solo_solo-artifacts` | `/shared/artifacts` | 独立产物原始 wheel、依赖闭包和校验清单 | 仅 Backend；Jupyter 通过产物 API 下载 |
 | `solo_jupyter-keyrings` | `/home/jovyan/.local/share/keyrings` | 加密凭据库 | Jupyter |
 | `solo_codex-home` | `/home/jovyan/.codex` | Codex 配置和登录状态 | Jupyter |
 | `solo_dolphinscheduler-resources` | `/tmp/dolphinscheduler` | 调度执行目录 | DolphinScheduler |
