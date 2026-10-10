@@ -1,0 +1,16 @@
+# 有 NVIDIA GPU 的主机叠加使用：Docker Desktop / WSL2，或 Linux 安装 NVIDIA Container Toolkit。
+# Jupyter 交互研究与 Worker 正式任务都需要同一块 GPU；无 GPU 主机不要叠加此文件。
+x-nvidia-gpu: &nvidia-gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  jupyter:
+    <<: *nvidia-gpu
+  dolphinscheduler-standalone:
+    <<: *nvidia-gpu

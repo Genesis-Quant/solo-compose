@@ -60,13 +60,28 @@ docker compose up -d --build --wait
 - Jupyter：<http://127.0.0.1:8888/lab>，使用根目录 `.env` 中的 `JUPYTER_TOKEN` 登录。
 - DolphinScheduler：<http://127.0.0.1:12346/dolphinscheduler/ui>，使用 `.env` 中的 `DOLPHINSCHEDULER_USERNAME/PASSWORD` 登录。
 
+### NVIDIA GPU
+
+有 NVIDIA 显卡的 Docker Desktop / WSL2 主机（Linux 主机需安装 NVIDIA Container Toolkit）叠加 [docker-compose.gpu.yml](docker-compose.gpu.yml)，为 Jupyter 交互研究和 DolphinScheduler Worker 正式任务分配全部 GPU。可在 `.env` 中固定启用，之后的 `docker compose` 命令都会自动叠加：
+
+```bash
+COMPOSE_PATH_SEPARATOR=,
+COMPOSE_FILE=docker-compose.yml,docker-compose.gpu.yml
+```
+
+无 GPU 的主机不要叠加此文件。项目需要 PyTorch 时在项目目录执行 `uv add 'torch>=2.6'`：清华镜像上的 Linux 版 torch 自带 CUDA 运行库，经项目卷的 uv 缓存硬链接安装；修改依赖后保存新版本，正式任务按冻结锁文件安装同一版本。可在两个容器中运行 `nvidia-smi` 确认显卡可见。
+
 根目录 Compose 启动 Backend、Frontend、Jupyter 和 DolphinScheduler 3.2.2 单机服务，使用 Solo 自己的 Docker 网络。项目管理、Jupyter 研究提交、策略组装与任务记录已连接 Backend；报告读取真实运行清单及其声明的 Parquet，不用示例数据替代研究结果。
+
+前端同时携带 DuckDB v1.5.4 的 EH/MVP 签名 Parquet 扩展，报告页从同源 `duckdb-extensions` 目录加载，不在浏览器运行时下载外部扩展。镜像构建校验版本与 SHA256；升级 DuckDB 时必须同步更新扩展，详见 [Frontend README](frontend/README.md#duckdb-本地扩展)。
+
+Notebook `report.show()` 使用 `/embed/report?source=jupyter&path=projects/.../reports/<uuid>/report.json&theme=light` URL iframe，经前端同源 `/jupyter/solo/files/` 读取轻量清单和 Parquet，复用上述本地扩展；旧 run 报告入口及独立 `to_html()` 不变。Vite `/jupyter` 代理的固定上游由 `SOLO_JUPYTER_API_URL` 指定（本机默认 `http://127.0.0.1:8888`，容器内 `http://jupyter:8888`）；`SOLO_JUPYTER_BROWSER_URL` 应与用户登录的 `JUPYTER_URL` 一致，用其 Host 验证认证 Cookie。请使用相同浏览器 hostname 登录 Jupyter，再加载 iframe；前端仅转发浏览器 Cookie/XSRF，不注入服务端 token 或开放匿名访问。生产静态部署需另外配置同源 `/jupyter/` 反代、可信同源下载 Referer 改写及 `/embed/report` SPA 回退，不绕过 Jupyter 的 Origin/权限检查，详见 [Notebook iframe 与代理配置](frontend/README.md#notebook-iframe)。
 
 `runtime/src/solo_runtime/apps` 提供五类项目及策略组装的六个任务入口；各入口准备任务环境、启动对应 Scheme 计算并核验完成清单。
 Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage apps <应用名> --input-file ...` 启动对应任务，
 报告写入共享目录。任务环境、包版本和 wheel 校验规则见 [Runtime README](runtime/README.md)。
 
-Python 包默认使用清华镜像 `https://pypi.tuna.tsinghua.edu.cn/simple`，Jupyter 与 Worker 镜像共用 [jupyter/uv.toml](jupyter/uv.toml)。依赖安装使用 uv 硬链接；项目、任务和发布检查环境分别使用所属卷根目录的 `.uv-cache`，使缓存与 `.venv` 位于同一文件系统。删除缓存目录不会破坏已安装的硬链接文件；研究 wheel 仍按原始字节独立冻结。保存研究版本时，新运行环境保留项目的索引配置；策略组装保留 Model 成果的 registry 索引，并合并本次生成的本地 wheel 索引。镜像地址必须在生成 `uv.lock` 前生效；Worker 按冻结锁安装，不能靠修改 `UV_DEFAULT_INDEX` 替换旧锁中的下载地址。已提交任务的输入、锁文件和哈希保持不变，修正来源后应保存新版本。
+构建和开发环境的 Python 包（pip / uv，包括固定版本的 uv 安装）默认使用清华镜像 `https://pypi.tuna.tsinghua.edu.cn/simple`，Backend、Runtime 和 Backtest 的开发锁文件也使用此源；Jupyter 与 Worker 镜像共用 [jupyter/uv.toml](jupyter/uv.toml)，uv 管理的 Python 从 `https://registry.npmmirror.com/-/binary/python-build-standalone` 下载。Frontend、Jupyter 插件和 Codex 的 npm 包使用 `https://registry.npmmirror.com`，APT 的 Debian / Ubuntu 软件源使用 `https://mirrors.tuna.tsinghua.edu.cn`。Docker Hub 基础镜像保留原名称和版本，镜像加速需在 Docker Desktop / Docker daemon 的 `registry-mirrors` 中配置；Jupyter 的 Quay 基础镜像不受 Docker Hub 加速配置影响。依赖安装使用 uv 硬链接；项目、任务和发布检查环境分别使用所属卷根目录的 `.uv-cache`，使缓存与 `.venv` 位于同一文件系统。删除缓存目录不会破坏已安装的硬链接文件；研究 wheel 仍按原始字节独立冻结。保存研究版本时，新运行环境保留项目的索引配置；策略组装保留 Model 成果的 registry 索引，并合并本次生成的本地 wheel 索引。镜像地址必须在生成 `uv.lock` 前生效；Worker 按冻结锁安装，不能靠修改 `UV_DEFAULT_INDEX` 替换旧锁中的下载地址。已提交任务的输入、锁文件和哈希保持不变，修正来源后应保存新版本。
 
 ## 创建研究项目
 

@@ -92,6 +92,7 @@ services:
       SOLO_SHARED_DIR: /shared
       UV_LINK_MODE: hardlink
       UV_CACHE_DIR: /shared/projects/.uv-cache
+      UV_PYTHON_INSTALL_MIRROR: https://registry.npmmirror.com/-/binary/python-build-standalone
       JUPYTER_URL: ${JUPYTER_URL:-http://127.0.0.1:8888}
       JUPYTER_API_URL: http://jupyter:8888
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
@@ -128,11 +129,14 @@ services:
       dockerfile: Dockerfile.frontend
     environment:
       SOLO_BACKEND_URL: http://backend:8000
+      SOLO_JUPYTER_API_URL: http://jupyter:8888
+      SOLO_JUPYTER_BROWSER_URL: ${JUPYTER_URL:-http://127.0.0.1:8888}
       CHOKIDAR_USEPOLLING: "true"
     ports:
       - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_BIND_PORT:-5174}:5174"
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/public:/app/public:ro
       - ./frontend/index.html:/app/index.html
     depends_on:
       backend:
@@ -146,7 +150,7 @@ services:
     restart: unless-stopped
 
   jupyter:
-    image: solo/jupyter:0.1.0
+    image: solo/jupyter:0.1.3-mcp-uuid
     build:
       context: ./jupyter
       args:
@@ -180,6 +184,7 @@ services:
       JUPYTER_PATH: /home/jovyan/.jupyter
       JP_LSP_VIRTUAL_DIR: /home/jovyan/.virtual_documents
       UV_PYTHON_INSTALL_DIR: /home/jovyan/.python
+      UV_PYTHON_INSTALL_MIRROR: https://registry.npmmirror.com/-/binary/python-build-standalone
       UV_LINK_MODE: hardlink
       UV_CACHE_DIR: /shared/projects/.uv-cache
       SOLO_BACKEND_URL: http://backend:8000
@@ -195,6 +200,7 @@ services:
       DOLPHIN_SNAPSHOT_TABLE: ${DOLPHIN_SNAPSHOT_TABLE:-snapshot}
       TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
       SOLO_SHARED_DIR: /shared
+      SOLO_REPORT_FRONTEND_URL: ${SOLO_REPORT_FRONTEND_URL:-http://127.0.0.1:5174}
       HTTP_PROXY: ${JUPYTER_HTTP_PROXY:-}
       HTTPS_PROXY: ${JUPYTER_HTTPS_PROXY:-}
       NO_PROXY: localhost,127.0.0.1,::1,backend,frontend,jupyter,host.docker.internal
@@ -212,6 +218,7 @@ services:
       - codex-home:/home/jovyan/.codex
       - ./jupyter/config/nbconvert/templates/latex/index.tex.j2:/opt/conda/share/jupyter/nbconvert/templates/latex/index.tex.j2:ro
       - ./jupyter/ipython_config.py:/etc/ipython/ipython_config.py:ro
+      - ./jupyter/solo_report_bridge.py:/etc/ipython/solo_report_bridge.py:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/login', timeout=5)"]
       interval: 10s
