@@ -73,6 +73,8 @@ COMPOSE_FILE=docker-compose.yml,docker-compose.gpu.yml
 
 根目录 Compose 启动 Backend、Frontend、Jupyter 和 DolphinScheduler 3.2.2 单机服务，使用 Solo 自己的 Docker 网络。项目管理、Jupyter 研究提交、策略组装与任务记录已连接 Backend；报告读取真实运行清单及其声明的 Parquet，不用示例数据替代研究结果。
 
+DolphinScheduler 健康检查同时检查 HTTP 和 Python Gateway 25333 端口，Backend 等它就绪后再启动。Docker Desktop 恢复已有容器时不保证 Compose 的依赖顺序，因此 Backend 在同步工作流前最多等待 Gateway 60 秒，总期限覆盖 DNS 解析和多地址连接；这段等待只检查连接，不重试用户创建或工作流提交。系统 DNS 调用无法中断时，探测守护线程可晚于启动调用结束，但不会接受迟到的成功或执行工作流同步，迟到的连接仍会关闭。超时或后续认证、同步失败仍明确中止启动，不伪装成健康服务。
+
 前端同时携带 DuckDB v1.5.4 的 EH/MVP 签名 Parquet 扩展，报告页从同源 `duckdb-extensions` 目录加载，不在浏览器运行时下载外部扩展。镜像构建校验版本与 SHA256；升级 DuckDB 时必须同步更新扩展，详见 [Frontend README](frontend/README.md#duckdb-本地扩展)。
 
 Notebook `report.show()` 使用 `/embed/report?source=jupyter&path=projects/.../reports/<uuid>/report.json&theme=light` URL iframe，经前端同源 `/jupyter/solo/files/` 读取轻量清单和 Parquet，复用上述本地扩展；旧 run 报告入口及独立 `to_html()` 不变。Vite `/jupyter` 代理的固定上游由 `SOLO_JUPYTER_API_URL` 指定（本机默认 `http://127.0.0.1:8888`，容器内 `http://jupyter:8888`）；`SOLO_JUPYTER_BROWSER_URL` 应与用户登录的 `JUPYTER_URL` 一致，用其 Host 验证认证 Cookie。请使用相同浏览器 hostname 登录 Jupyter，再加载 iframe；前端仅转发浏览器 Cookie/XSRF，不注入服务端 token 或开放匿名访问。生产静态部署需另外配置同源 `/jupyter/` 反代、可信同源下载 Referer 改写及 `/embed/report` SPA 回退，不绕过 Jupyter 的 Origin/权限检查，详见 [Notebook iframe 与代理配置](frontend/README.md#notebook-iframe)。
