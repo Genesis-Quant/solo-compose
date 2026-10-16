@@ -73,17 +73,17 @@ COMPOSE_FILE=docker-compose.yml,docker-compose.gpu.yml
 
 根目录 Compose 启动 Backend、Frontend、Jupyter 和 DolphinScheduler 3.2.2 单机服务，使用 Solo 自己的 Docker 网络。项目管理、Jupyter 研究提交、策略组装与任务记录已连接 Backend；报告读取真实运行清单及其声明的 Parquet，不用示例数据替代研究结果。
 
-DolphinScheduler 健康检查同时检查 HTTP 和 Python Gateway 25333 端口，Backend 等它就绪后再启动。Docker Desktop 恢复已有容器时不保证 Compose 的依赖顺序，因此 Backend 在同步工作流前最多等待 Gateway 60 秒，总期限覆盖 DNS 解析和多地址连接；这段等待只检查连接，不重试用户创建或工作流提交。系统 DNS 调用无法中断时，探测守护线程可晚于启动调用结束，但不会接受迟到的成功或执行工作流同步，迟到的连接仍会关闭。超时或后续认证、同步失败仍明确中止启动，不伪装成健康服务。
+DolphinScheduler 健康检查同时检查 HTTP 和 Python Gateway 25333 端口，Backend 等它就绪后再启动。Docker Desktop 恢复已有容器时不保证 Compose 的依赖顺序，因此 Backend 在同步工作流前最多等待 Gateway 60 秒，总期限覆盖 DNS 解析和多地址连接；这段等待只检查连接，不重试用户创建或工作流提交。系统 DNS 调用无法中断时，探测守护线程可晚于启动调用结束，但不会接受迟到的成功或执行工作流同步，迟到的连接仍会关闭。工作流同步失败时记录日志并继续启动，项目、报告等不依赖调度器的接口照常可用，提交任务时再报告调度错误。
 
-前端同时携带 DuckDB v1.5.4 的 EH/MVP 签名 Parquet 扩展，报告页从同源 `duckdb-extensions` 目录加载，不在浏览器运行时下载外部扩展。镜像构建校验版本与 SHA256；升级 DuckDB 时必须同步更新扩展，详见 [Frontend README](frontend/README.md#duckdb-本地扩展)。
+前端同时携带 DuckDB v1.5.4 的 EH/MVP 签名 Parquet 扩展，报告页从同源 `duckdb-extensions` 目录加载，不在浏览器运行时下载外部扩展，签名由 DuckDB 自身校验。升级 DuckDB 时必须同步更新扩展，详见 [Frontend README](frontend/README.md#duckdb-本地扩展)。
 
 Notebook `report.show()` 使用 `/embed/report?source=jupyter&path=projects/.../reports/<uuid>/report.json&theme=light` URL iframe，经前端同源 `/jupyter/solo/files/` 读取轻量清单和 Parquet，复用上述本地扩展；旧 run 报告入口及独立 `to_html()` 不变。Vite `/jupyter` 代理的固定上游由 `SOLO_JUPYTER_API_URL` 指定（本机默认 `http://127.0.0.1:8888`，容器内 `http://jupyter:8888`）；`SOLO_JUPYTER_BROWSER_URL` 应与用户登录的 `JUPYTER_URL` 一致，用其 Host 验证认证 Cookie。请使用相同浏览器 hostname 登录 Jupyter，再加载 iframe；前端仅转发浏览器 Cookie/XSRF，不注入服务端 token 或开放匿名访问。生产静态部署需另外配置同源 `/jupyter/` 反代、可信同源下载 Referer 改写及 `/embed/report` SPA 回退，不绕过 Jupyter 的 Origin/权限检查，详见 [Notebook iframe 与代理配置](frontend/README.md#notebook-iframe)。
 
 `runtime/src/solo_runtime/apps` 提供五类项目及策略组装的六个任务入口；各入口准备任务环境、启动对应 Scheme 计算并核验完成清单。
 Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage apps <应用名> --input-file ...` 启动对应任务，
-报告写入共享目录。任务环境、包版本和 wheel 校验规则见 [Runtime README](runtime/README.md)。
+报告写入共享目录。任务环境与包版本规则见 [Runtime README](runtime/README.md)。
 
-构建和开发环境的 Python 包（pip / uv，包括固定版本的 uv 安装）默认使用清华镜像 `https://pypi.tuna.tsinghua.edu.cn/simple`，Backend、Runtime 和 Backtest 的开发锁文件也使用此源；Jupyter 与 Worker 镜像共用 [jupyter/uv.toml](jupyter/uv.toml)，uv 管理的 Python 从 `https://registry.npmmirror.com/-/binary/python-build-standalone` 下载。Frontend、Jupyter 插件和 Codex 的 npm 包使用 `https://registry.npmmirror.com`，APT 的 Debian / Ubuntu 软件源使用 `https://mirrors.tuna.tsinghua.edu.cn`。Docker Hub 基础镜像保留原名称和版本，镜像加速需在 Docker Desktop / Docker daemon 的 `registry-mirrors` 中配置；Jupyter 的 Quay 基础镜像不受 Docker Hub 加速配置影响。依赖安装使用 uv 硬链接；项目、任务和发布检查环境分别使用所属卷根目录的 `.uv-cache`，使缓存与 `.venv` 位于同一文件系统。删除缓存目录不会破坏已安装的硬链接文件；研究 wheel 仍按原始字节独立冻结。保存研究版本时，新运行环境保留项目的索引配置；策略组装保留 Model 成果的 registry 索引，并合并本次生成的本地 wheel 索引。镜像地址必须在生成 `uv.lock` 前生效；Worker 按冻结锁安装，不能靠修改 `UV_DEFAULT_INDEX` 替换旧锁中的下载地址。已提交任务的输入、锁文件和哈希保持不变，修正来源后应保存新版本。
+构建和开发环境的 Python 包（pip / uv，包括固定版本的 uv 安装）默认使用清华镜像 `https://pypi.tuna.tsinghua.edu.cn/simple`，Backend、Runtime 和 Backtest 的开发锁文件也使用此源；Jupyter 与 Worker 镜像共用 [jupyter/uv.toml](jupyter/uv.toml)，uv 管理的 Python 从 `https://registry.npmmirror.com/-/binary/python-build-standalone` 下载。Frontend、Jupyter 插件和 Codex 的 npm 包使用 `https://registry.npmmirror.com`，APT 的 Debian / Ubuntu 软件源使用 `https://mirrors.tuna.tsinghua.edu.cn`。Docker Hub 基础镜像保留原名称和版本，镜像加速需在 Docker Desktop / Docker daemon 的 `registry-mirrors` 中配置；Jupyter 的 Quay 基础镜像不受 Docker Hub 加速配置影响。依赖安装使用 uv 硬链接；项目、任务和发布检查环境分别使用所属卷根目录的 `.uv-cache`，使缓存与 `.venv` 位于同一文件系统。删除缓存目录不会破坏已安装的硬链接文件；研究 wheel 仍按原始字节独立冻结。保存研究版本时，新运行环境保留项目的索引配置；策略组装保留 Model 成果的 registry 索引，并合并本次生成的本地 wheel 索引。镜像地址必须在生成 `uv.lock` 前生效；Worker 按冻结锁安装，不能靠修改 `UV_DEFAULT_INDEX` 替换旧锁中的下载地址。已提交任务的输入和锁文件保持不变，修正来源后应保存新版本。
 
 ## 创建研究项目
 
@@ -99,21 +99,21 @@ Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage ap
 
 ## 独立发布成果
 
-研究成功后点击“发布版本”，通过真实发布接口将准确 wheel、来源快照和依赖闭包封存到独立产物库。“发布成果”侧栏入口提供真实文件大小、SHA256、下载和删除操作；Jupyter 安装与策略组装按产物 UUID 选择，不以源项目是否存在作为依赖身份。注册候选 wheel 不等于发布，同一已发布 package/version 不允许更换字节。
+研究成功后点击“发布版本”，通过发布接口将 wheel、来源快照和依赖闭包复制到独立产物库。“发布成果”侧栏入口提供文件大小、下载和删除操作；Jupyter 安装与策略组装按成果 UUID 选择，不以源项目是否存在作为依赖身份。注册候选 wheel 不等于发布，同一 package/version 只能发布一次。
 
-删除成果需要确认准确包版本、文件、SHA256 和成果 UUID，将永久删除该成果的登记记录、原始 wheel 及发布环境，不删除源项目或已有任务自己的冻结副本、输入、锁文件和报告。仍被项目当前依赖、有效安装事务、其他登记产物依赖或尚未接受的策略引用时拒绝删除并说明原因。删除后不能再下载该成果或通过其登记用于新安装、策略组装及重新发布。文件清理部分失败时可按原成果 UUID 重试，不会误删后来登记的同名或同 SHA 成果。
+删除成果需要确认包版本、文件和成果 UUID，将永久删除该成果的登记记录、原始 wheel 及发布环境，不删除源项目或已有任务自己的冻结副本、输入、锁文件和报告。仍被项目当前依赖、其他登记成果依赖或策略引用时拒绝删除并说明原因。删除后不能再下载该成果或用于新安装、策略组装及重新发布。
 
-任务提交前保存自己的准确输入、锁文件哈希及 `accepted_artifacts`。删除上游项目不会使已经接受的下游任务失去身份；Worker 只使用该任务自己的冻结副本，并在安装前、执行前和执行后核验本地 wheel 字节。没有引用的未发布产物可以回收，已发布产物及其依赖闭包独立保留。
+任务提交时在 `accepted_artifacts` 记录所用成果的 UUID 与来源快照。删除上游项目不会使已经接受的下游任务失去身份；Worker 只使用该任务自己的冻结副本，按锁文件安装。没有引用的未发布成果可以回收，已发布成果及其依赖闭包独立保留。
 
 ## 版本退役
 
 退役政策唯一来源为 [backend/version-policy.json](backend/version-policy.json)，通过 `GET /api/v1/version-policy` 查询。Scheme 0.1.0、1.0.0、1.0.1、1.1.0 与 Algo 模板 0.1.0、1.0.0、1.0.1 已退役；新项目使用 Scheme / Algo 1.2.0 及满足契约的后续版本。退役与主次版本兼容是两个独立条件：同系列也不能新增使用已退役来源。
 
-退役版本不出现在新建、上游安装或策略组装候选中。Backend 在新建、保存、提交与组装入口校验政策，Jupyter 在执行项目表单和安装前调用中央准入接口，Runtime 在安装任务环境前核验 Backend 管理的 Run UUID、输入和锁文件 SHA256，并与提交前保存的数据库哈希匹配；服务不可用或版本来源不明时拒绝执行。旧任务不能用原输入另行重放来绕过退役。
+退役版本不出现在新建、上游安装或策略组装候选中。Backend 在新建、保存、提交与组装入口校验政策，Jupyter 在执行项目表单和安装前调用中央准入接口，Runtime 在安装任务环境前按 Run UUID 和任务类型请求 Backend 准入，Backend 只按数据库记录判断；服务不可用或版本来源不明时拒绝执行。旧任务不能用原输入另行重放来绕过退役。
 
 退役本身不改写或删除历史项目、Notebook、源码、锁文件、wheel 和报告，不移动或删除 Git Tag，也不自动迁移依赖。用户明确删除项目时按项目生命周期清理所属资源；已发布产物及独立下游保留。仍存在的历史报告继续按 Scheme 主版本渲染。发布切换时没有未完成任务，政策不启用基于创建时间或 `queued` 状态的例外放行。更新 Jupyter 插件和 Worker 需要构建相应镜像；有正在使用的 Kernel 时不要为了更新直接重启 Jupyter。
 
-上游安装先把已保存源码及所需本地运行时依赖构建为 wheel，保留原始 `Requires-Dist`，不继承上游 `tool.uv.sources.scheme`，不使用 Scheme override 覆盖依赖要求。完整安装在隔离环境解析与验证后才提交；当前 Scheme source 和实际补丁版本保持不变，提交失败恢复配置、锁文件及原 `.venv`。最终状态确认断网时保留项目内 `.solo-installation.json`，恢复网络后按原安装 UUID 补偿；已接受回执不按 TTL 丢弃旧依赖引用。
+上游安装先把已保存源码及所需本地运行时依赖构建为 wheel，保留原始 `Requires-Dist`，不继承上游 `tool.uv.sources.scheme`，不使用 Scheme override 覆盖依赖要求。安装前在内存保存原配置和锁文件，uv 安装失败时写回并重新同步；当前 Scheme source 和实际补丁版本保持不变。安装成功后向 Backend 登记已接受的成果 UUID。
 
 ## 共享目录
 
@@ -121,7 +121,7 @@ Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage ap
 | --- | --- | --- | --- |
 | `solo_solo-projects` | `/shared/projects` | 研究项目源码、Notebook、项目 uv 环境 | Backend、Jupyter，均可读写 |
 | `solo_solo-runs` | `/shared/runs` | 任务输入、wheel、uv.lock、隔离环境和报告 Parquet | Backend、Jupyter、DolphinScheduler Worker，均可读写 |
-| `solo_solo-artifacts` | `/shared/artifacts` | 独立产物原始 wheel、依赖闭包和校验清单 | 仅 Backend；Jupyter 通过产物 API 下载 |
+| `solo_solo-artifacts` | `/shared/artifacts` | 独立产物原始 wheel、依赖闭包和发布清单 | 仅 Backend；Jupyter 通过产物 API 下载 |
 | `solo_jupyter-keyrings` | `/home/jovyan/.local/share/keyrings` | 加密凭据库 | Jupyter |
 | `solo_codex-home` | `/home/jovyan/.codex` | Codex 配置和登录状态 | Jupyter |
 | `solo_dolphinscheduler-resources` | `/tmp/dolphinscheduler` | 调度执行目录 | DolphinScheduler |
@@ -139,7 +139,7 @@ Backend 和 Jupyter 均以 root 运行，无独立初始化服务。Jupyter 直�
 
 Backend 启动时通过 Python Gateway 同步 `solo-runtime` 项目下的 `factor`、`model`、`optimize`、`control`、`execution`、`strategy` 六个工作流，与 Runtime apps 一一对应。它们均为手动触发的单 Shell 任务，不设置定时计划，不自动重试。Worker 内置 `solo-runtime==1.1.0`，任务以 `root` 租户运行，并通过 `SOLO_BACKEND_URL=http://backend:8000` 查询执行准入。
 
-工作流仅接收 `input_file`，例如 `/shared/runs/<run-id>/input.json`。输入包含全部运行参数、候选 wheel、锁文件和输出路径；不得含密钥。正式调用前准备该次任务的 `environment/pyproject.toml` 和 `environment/uv.lock`，不使用项目可变源码目录。Runtime 按锁文件安装独立依赖并启动任务环境中的 scheme；scheme 核对版本、wheel 哈希及接口，写出 Parquet 和 `run.json`，Runtime 核验完成清单和报告哈希。每次运行使用独立任务目录；已有成功报告的输出目录不会被覆盖。
+工作流仅接收 `input_file`，例如 `/shared/runs/<run-id>/input.json`。输入包含全部运行参数、候选 wheel、锁文件和输出路径；不得含密钥。正式调用前准备该次任务的 `environment/pyproject.toml` 和 `environment/uv.lock`，不使用项目可变源码目录。Runtime 按锁文件安装独立依赖并启动任务环境中的 scheme；scheme 核对版本及接口，写出 Parquet 和 `run.json`，Runtime 检查完成状态和声明的报告文件存在。每次运行使用独立任务目录；已有成功报告的输出目录不会被覆盖。
 
 ```bash
 # 同步工作流；同名定义保持原 code，更新定义版本
