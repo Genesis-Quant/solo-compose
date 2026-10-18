@@ -122,12 +122,13 @@ Jupyter 通过 `scheme.execute` 调用研究 SDK；Worker 使用 `solo-manage ap
 | `solo_solo-projects` | `/shared/projects` | 研究项目源码、Notebook、项目 uv 环境 | Backend、Jupyter，均可读写 |
 | `solo_solo-runs` | `/shared/runs` | 任务输入、wheel、uv.lock、隔离环境和报告 Parquet | Backend、Jupyter、DolphinScheduler Worker，均可读写 |
 | `solo_solo-artifacts` | `/shared/artifacts` | 独立产物原始 wheel、依赖闭包和发布清单 | 仅 Backend；Jupyter 通过产物 API 下载 |
+| `solo_solo-skills` | `/shared/skills` | 自建研究技能；5 个预置技能从 `jupyter/skills/<名称>` 分别挂载在其中 | Jupyter |
 | `solo_jupyter-keyrings` | `/home/jovyan/.local/share/keyrings` | 加密凭据库 | Jupyter |
 | `solo_codex-home` | `/home/jovyan/.codex` | Codex 配置和登录状态 | Jupyter |
 | `solo_dolphinscheduler-resources` | `/tmp/dolphinscheduler` | 调度执行目录 | DolphinScheduler |
 | `solo_dolphinscheduler-logs` | `/opt/dolphinscheduler/logs` | 服务与任务日志 | DolphinScheduler |
 
-Backend 和 Jupyter 统一使用 `SOLO_SHARED_DIR=/shared`。Jupyter 文件浏览器根目录为 `/shared`，项目链接使用 `/lab/tree/projects/<项目类型>/<项目名>/research.ipynb`。Frontend 不直接挂载共享卷。Worker 只挂载 runs 卷，不访问项目源码卷。
+Backend 和 Jupyter 统一使用 `SOLO_SHARED_DIR=/shared`。Jupyter 文件浏览器根目录为 `/shared`，项目链接使用 `/lab/tree/projects/<项目类型>/<项目名>/research.ipynb`。`/shared/skills` 使用 `solo_solo-skills` 数据卷保存自建技能，不进入仓库；5 个预置技能分别从 `./jupyter/skills/<名称>` 读写挂载进去，在文件浏览器中修改预置技能会同步到仓库。Jupyter 的 Codex/ACP 从只读挂载的 `jupyter/codex/skills.json` 注册额外技能目录，不使用 `/etc/codex/skills` 链接；原生终端 Codex 不读取这份集成配置。Frontend 不直接挂载共享卷。Worker 只挂载 runs 卷，不访问项目源码卷。
 
 Backend 和 Jupyter 均以 root 运行，无独立初始化服务。Jupyter 直接启动，不经过镜像切换到 jovyan 的入口脚本，HOME 仍为 `/home/jovyan`，沿用已有配置、凭据库和 Codex 登录状态。命名卷保存在 Docker Desktop 的 Linux 文件系统中，适合项目虚拟环境；不是 Windows 源码目录的映射。Jupyter 配置仍由 `jupyter/config` 持久化。
 

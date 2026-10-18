@@ -220,6 +220,17 @@ services:
     volumes:
       - solo-projects:/shared/projects
       - solo-runs:/shared/runs
+      - type: volume
+        source: solo-skills
+        target: /shared/skills
+        volume:
+          nocopy: true
+      - ./jupyter/skills/backtest:/shared/skills/backtest
+      - ./jupyter/skills/data-query:/shared/skills/data-query
+      - ./jupyter/skills/dolphindb:/shared/skills/dolphindb
+      - ./jupyter/skills/dsl:/shared/skills/dsl
+      - ./jupyter/skills/factor-analysis:/shared/skills/factor-analysis
+      - ./jupyter/codex/skills.json:/opt/jupyter-codex/skills.json:ro
       - ./jupyter/config:/home/jovyan/.jupyter
       - jupyter-python:/home/jovyan/.python
       - jupyter-virtual-documents:/home/jovyan/.virtual_documents
@@ -240,6 +251,7 @@ volumes:
   solo-projects:
   solo-runs:
   solo-artifacts:
+  solo-skills:
   jupyter-keyrings:
   jupyter-python:
   jupyter-virtual-documents:
