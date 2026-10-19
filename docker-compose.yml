@@ -167,7 +167,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   jupyter:
-    image: solo/jupyter:0.1.3-mcp-uuid
+    image: solo/jupyter:0.1.4-optional-validation
     build:
       context: ./jupyter
       args:
