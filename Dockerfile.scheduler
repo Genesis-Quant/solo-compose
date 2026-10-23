@@ -1,9 +1,9 @@
 FROM python:3.12-slim-bookworm AS uv
-ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-RUN python -m pip install --no-cache-dir --no-deps --only-binary=:all: uv==0.11.25
+ARG PIP_INDEX_URL
+RUN python -m pip install --no-cache-dir --no-deps --only-binary=:all: uv
 
 FROM python:3.12-slim-bookworm AS runtime-builder
-ENV UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG UV_DEFAULT_INDEX
 COPY --from=uv /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
 WORKDIR /build
 COPY runtime/pyproject.toml runtime/uv.lock /build/runtime/
@@ -12,37 +12,33 @@ RUN uv build /build/runtime --wheel --out-dir /dist
 
 FROM apache/dolphinscheduler-standalone-server:3.2.2
 USER root
-ARG UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
-ARG UV_PYTHON_INSTALL_MIRROR=https://registry.npmmirror.com/-/binary/python-build-standalone
+ARG UV_DEFAULT_INDEX
+ARG UV_PYTHON_INSTALL_MIRROR
 RUN sed -i -e 's|http://archive.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' \
         -e 's|http://security.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends git psmisc libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=uv /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
-ENV UV_PYTHON_INSTALL_DIR=/opt/solo-runtime/python \
-    UV_PYTHON_INSTALL_MIRROR=${UV_PYTHON_INSTALL_MIRROR} \
-    UV_PYTHON_PREFERENCE=only-managed \
-    UV_DEFAULT_INDEX=${UV_DEFAULT_INDEX} \
-    UV_LINK_MODE=hardlink \
+ENV UV_PYTHON_PREFERENCE=only-managed \
     VIRTUAL_ENV=/opt/solo-runtime/.venv
-RUN uv python install 3.12 && uv venv --python 3.12 "${VIRTUAL_ENV}"
+RUN uv python install 3.12.13 && uv venv --python 3.12.13 "${VIRTUAL_ENV}"
 COPY --from=runtime-builder /dist /opt/solo-runtime/wheels
 RUN uv pip install --python "${VIRTUAL_ENV}/bin/python" --no-deps /opt/solo-runtime/wheels/*.whl \
     && "${VIRTUAL_ENV}/bin/solo-manage" --help
 
 # 研究任务与 Backend/Jupyter 一样使用 root。
-RUN printf '\nexport PATH="/opt/solo-runtime/.venv/bin:/usr/local/bin:$PATH"\nexport UV_PYTHON_INSTALL_DIR=/opt/solo-runtime/python\nexport UV_PYTHON_PREFERENCE=only-managed\nexport UV_LINK_MODE=hardlink\nexport UV_CACHE_DIR=/shared/runs/.uv-cache\numask 0002\n' \
+RUN printf '\nexport PATH="/opt/solo-runtime/.venv/bin:/usr/local/bin:$PATH"\nexport UV_PYTHON_PREFERENCE=only-managed\numask 0002\n' \
         >> /opt/dolphinscheduler/conf/dolphinscheduler_env.sh \
     && sed -i 's|^shell.env_source_list=.*$|shell.env_source_list=/opt/dolphinscheduler/conf/dolphinscheduler_env.sh|' \
         /opt/dolphinscheduler/conf/common.properties \
     && printf '%s\n' \
         'Defaults env_keep += "SOLO_DOLPHIN_HOST SOLO_DOLPHIN_PORT SOLO_DOLPHIN_USERNAME SOLO_DOLPHIN_PASSWORD"' \
         'Defaults env_keep += "BACKTEST_DOLPHIN_HOST BACKTEST_DOLPHIN_PORT BACKTEST_DOLPHIN_USERNAME BACKTEST_DOLPHIN_PASSWORD"' \
-        'Defaults env_keep += "UV_DEFAULT_INDEX UV_PYTHON_INSTALL_MIRROR"' \
-        'Defaults env_keep += "TUSHARE_TOKEN SOLO_BACKEND_URL"' \
+        'Defaults env_keep += "PIP_INDEX_URL UV_DEFAULT_INDEX UV_PYTHON_INSTALL_MIRROR npm_config_registry UV_LINK_MODE"' \
+        'Defaults env_keep += "GITEE_TOKEN GITEE_USERNAME GIT_TERMINAL_PROMPT GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0"' \
+        'Defaults env_keep += "TUSHARE_TOKEN SOLO_BACKEND_URL SOLO_SHARED_DIR"' \
         > /etc/sudoers.d/solo-runtime-env \
     && chmod 0440 /etc/sudoers.d/solo-runtime-env \
     && visudo -cf /etc/sudoers.d/solo-runtime-env
 ENV PATH="/opt/solo-runtime/.venv/bin:${PATH}"
-COPY jupyter/uv.toml /etc/uv/uv.toml

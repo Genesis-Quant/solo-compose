@@ -1,5 +1,5 @@
 FROM node:lts-bookworm-slim
-ENV npm_config_registry=https://registry.npmmirror.com
+ARG npm_config_registry
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund

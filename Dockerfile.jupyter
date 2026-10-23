@@ -1,0 +1,54 @@
+ARG NOTEBOOK_IMAGE=quay.io/jupyter/scipy-notebook:latest
+FROM ${NOTEBOOK_IMAGE} AS base
+USER root
+RUN sed -i -e 's|http://archive.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' \
+        -e 's|http://security.ubuntu.com/ubuntu|https://mirrors.tuna.tsinghua.edu.cn/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates fonts-noto-cjk pandoc \
+       texlive-fonts-recommended texlive-lang-chinese texlive-plain-generic texlive-xetex \
+    && rm -rf /var/lib/apt/lists/*
+RUN rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx \
+    && curl --fail --show-error --location --retry 3 https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+ARG PIP_INDEX_URL
+ARG npm_config_registry
+ARG UV_DEFAULT_INDEX
+ARG UV_PYTHON_INSTALL_MIRROR
+
+FROM base AS extension
+WORKDIR /opt/solo-extension
+COPY jupyter/extension/package.json jupyter/extension/package-lock.json jupyter/extension/.npmrc ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY jupyter/extension/ ./
+RUN npm run build -- --core-package-file "$(python -c 'from pathlib import Path; import jupyterlab; print(Path(jupyterlab.__file__).parent / "staging/package.json")')" \
+    && python -m pip wheel --no-cache-dir --no-deps --wheel-dir /tmp/solo-wheel .
+
+FROM base
+ENV JUPYTER_PATH=/home/jovyan/.jupyter \
+    JP_LSP_VIRTUAL_DIR=/home/jovyan/.virtual_documents \
+    SOLO_BACKEND_URL=http://backend:8000
+RUN --mount=type=cache,target=/home/jovyan/.npm npm install --global --no-audit --no-fund @oh-my-pi/pi-coding-agent bun \
+    && omp --version
+COPY jupyter/pyproject.toml jupyter/uv.lock /opt/jupyter-environment/
+RUN --mount=type=cache,target=/home/jovyan/.cache/uv python -m pip install --no-cache-dir --no-deps uv \
+    && uv export --frozen --no-dev --no-hashes --project /opt/jupyter-environment \
+       | uv pip install --python /opt/conda/bin/python --requirement - \
+    && python -m pip check
+RUN uv python install 3.12.13 \
+    && mkdir -p /opt/solo-defaults \
+    && mv "$(uv python dir)" /opt/solo-defaults/uv-python
+COPY jupyter/scripts/patch_mcp_uuid.py /tmp/patch_mcp_uuid.py
+RUN python -B /tmp/patch_mcp_uuid.py
+COPY --from=extension /tmp/solo-wheel /tmp/solo-wheel
+RUN uv pip install --python /opt/conda/bin/python --no-deps /tmp/solo-wheel/*.whl \
+    && python -m pip check
+COPY jupyter/config/jupyter_server_config.json /etc/jupyter/jupyter_server_config.json
+COPY jupyter/ipython_config.py jupyter/solo_report_bridge.py /etc/ipython/
+COPY jupyter/config/nbconvert/templates/latex/ /opt/conda/share/jupyter/nbconvert/templates/latex/
+COPY jupyter/config/lab/user-settings/ /opt/solo-defaults/jupyter-settings/
+COPY jupyter/skills/ /opt/solo-defaults/skills/
+COPY --chmod=755 jupyter/scripts/start-jupyter.sh /usr/local/bin/start-jupyter.sh
+WORKDIR /home/jovyan
+ENTRYPOINT ["tini", "-g", "--"]
+CMD ["/usr/local/bin/start-jupyter.sh"]

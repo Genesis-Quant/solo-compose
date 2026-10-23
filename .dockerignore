@@ -13,9 +13,11 @@ algos/*
 !algos/scheme
 backtest
 mvp
-jupyter/*
-!jupyter/uv.toml
+jupyter/config/kernels
+jupyter/config/notary
+jupyter/config/migrated
+jupyter/config/jupyter_server_config.py
+jupyter/config/dolphindb-extension
+jupyter/config/share
+jupyter/config/serverconfig
 **/.test-runs
-**/.venv
-**/__pycache__
-**/dist
