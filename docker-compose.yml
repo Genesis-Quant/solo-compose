@@ -25,14 +25,9 @@ x-dolphinscheduler-environment: &dolphinscheduler-environment
 
 x-research-environment: &research-environment
   TUSHARE_TOKEN: ${TUSHARE_TOKEN:?Set TUSHARE_TOKEN in .env}
-  SOLO_DOLPHIN_HOST: ${SOLO_DOLPHIN_HOST:-dolphindb}
-  SOLO_DOLPHIN_PORT: ${SOLO_DOLPHIN_PORT:-8848}
-  SOLO_DOLPHIN_USERNAME: ${SOLO_DOLPHIN_USERNAME:?Set SOLO_DOLPHIN_USERNAME in .env}
-  SOLO_DOLPHIN_PASSWORD: ${SOLO_DOLPHIN_PASSWORD:?Set SOLO_DOLPHIN_PASSWORD in .env}
-  BACKTEST_DOLPHIN_HOST: ${BACKTEST_DOLPHIN_HOST:-dolphindb}
-  BACKTEST_DOLPHIN_PORT: ${BACKTEST_DOLPHIN_PORT:-8848}
-  BACKTEST_DOLPHIN_USERNAME: ${BACKTEST_DOLPHIN_USERNAME:?Set BACKTEST_DOLPHIN_USERNAME in .env}
-  BACKTEST_DOLPHIN_PASSWORD: ${BACKTEST_DOLPHIN_PASSWORD:?Set BACKTEST_DOLPHIN_PASSWORD in .env}
+  DOLPHINDB_ENDPOINTS: ${DOLPHINDB_ENDPOINTS:-dolphindb:8848}
+  DOLPHINDB_USERNAME: ${DOLPHINDB_USERNAME:?Set DOLPHINDB_USERNAME in .env}
+  DOLPHINDB_PASSWORD: ${DOLPHINDB_PASSWORD:?Set DOLPHINDB_PASSWORD in .env}
 
 services:
   dolphinscheduler-schema-initializer:
@@ -48,7 +43,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   dolphinscheduler-standalone:
-    image: solo/dolphinscheduler-standalone:3.2.2-runtime-1.1.0
+    image: solo/dolphinscheduler-standalone:3.2.2-runtime-1.1.1
     build:
       context: .
       args: *mirror-environment
@@ -104,7 +99,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   backend:
-    image: solo/backend:0.1.1
+    image: solo/backend:0.1.2
     build:
       context: .
       args: *mirror-environment
@@ -205,7 +200,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   jupyter:
-    image: solo/jupyter:0.2.0
+    image: solo/jupyter:0.2.1
     build:
       context: .
       args: *mirror-environment

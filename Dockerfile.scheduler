@@ -33,8 +33,7 @@ RUN printf '\nexport PATH="/opt/solo-runtime/.venv/bin:/usr/local/bin:$PATH"\nex
     && sed -i 's|^shell.env_source_list=.*$|shell.env_source_list=/opt/dolphinscheduler/conf/dolphinscheduler_env.sh|' \
         /opt/dolphinscheduler/conf/common.properties \
     && printf '%s\n' \
-        'Defaults env_keep += "SOLO_DOLPHIN_HOST SOLO_DOLPHIN_PORT SOLO_DOLPHIN_USERNAME SOLO_DOLPHIN_PASSWORD"' \
-        'Defaults env_keep += "BACKTEST_DOLPHIN_HOST BACKTEST_DOLPHIN_PORT BACKTEST_DOLPHIN_USERNAME BACKTEST_DOLPHIN_PASSWORD"' \
+        'Defaults env_keep += "DOLPHINDB_ENDPOINTS DOLPHINDB_USERNAME DOLPHINDB_PASSWORD"' \
         'Defaults env_keep += "PIP_INDEX_URL UV_DEFAULT_INDEX UV_PYTHON_INSTALL_MIRROR npm_config_registry UV_LINK_MODE"' \
         'Defaults env_keep += "GITEE_TOKEN GITEE_USERNAME GIT_TERMINAL_PROMPT GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0"' \
         'Defaults env_keep += "TUSHARE_TOKEN SOLO_BACKEND_URL SOLO_SHARED_DIR"' \
