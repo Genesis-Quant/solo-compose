@@ -173,7 +173,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   frontend:
-    image: solo/frontend:0.1.0
+    image: solo/frontend:0.1.1
     build:
       context: .
       args: *mirror-environment
