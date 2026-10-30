@@ -99,7 +99,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   backend:
-    image: solo/backend:0.1.2
+    image: solo/backend:0.1.6
     build:
       context: .
       args: *mirror-environment
@@ -173,7 +173,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   frontend:
-    image: solo/frontend:0.1.1
+    image: solo/frontend:0.1.6
     build:
       context: .
       args: *mirror-environment
@@ -200,10 +200,12 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   jupyter:
-    image: solo/jupyter:0.2.1
+    image: solo/jupyter:0.2.2
     build:
       context: .
-      args: *mirror-environment
+      args:
+        <<: *mirror-environment
+        UV_PYTHON_INSTALL_MIRROR: https://github.com/astral-sh/python-build-standalone/releases/download
       dockerfile: Dockerfile.jupyter
     user: root
     working_dir: /home/jovyan
