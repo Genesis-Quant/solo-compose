@@ -200,7 +200,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   jupyter:
-    image: solo/jupyter:0.2.3
+    image: solo/jupyter:0.2.4
     build:
       context: .
       args: *mirror-environment
