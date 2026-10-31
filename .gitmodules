@@ -16,3 +16,6 @@
 [submodule "runtime"]
 	path = runtime
 	url = https://gitee.com/genesis-quant/solo-runtime.git
+[submodule "query"]
+	path = query
+	url = https://gitee.com/genesis-quant/query.git
