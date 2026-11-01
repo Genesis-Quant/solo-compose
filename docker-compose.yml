@@ -52,6 +52,8 @@ services:
       <<: [*dolphinscheduler-environment, *gitee-environment, *research-environment, *mirror-environment]
       TZ: Asia/Shanghai
       MYBATISPLUS_CONFIGURATION_DATABASEID: PostgreSQL
+      # 冷启动时等待 PostgreSQL，避免方言识别失败后固定使用默认 MySQL SQL。
+      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "60000"
       SPRING_JACKSON_TIME_ZONE: UTC
       API_PYTHON_GATEWAY_ENABLED: "true"
       SOLO_BACKEND_URL: http://backend:8000
@@ -99,7 +101,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   backend:
-    image: solo/backend:0.1.6
+    image: solo/backend:0.1.7
     build:
       context: .
       args: *mirror-environment
@@ -173,7 +175,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   frontend:
-    image: solo/frontend:0.1.7
+    image: solo/frontend:0.1.8
     build:
       context: .
       args: *mirror-environment
@@ -213,6 +215,8 @@ services:
       UV_LINK_MODE: hardlink
       HOME: /home/jovyan
       SOLO_SHARED_DIR: /home/jovyan
+      DOLPHINDB_WORKER_USERNAME: ${DOLPHINDB_WORKER_USERNAME:-}
+      DOLPHINDB_WORKER_PASSWORD: ${DOLPHINDB_WORKER_PASSWORD:-}
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
     ports:
       - "${JUPYTER_BIND_IP:-127.0.0.1}:${JUPYTER_BIND_PORT:-8888}:8888"
