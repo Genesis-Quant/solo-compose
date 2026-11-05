@@ -48,6 +48,13 @@ COPY jupyter/ipython_config.py jupyter/solo_report_bridge.py /etc/ipython/
 COPY jupyter/config/nbconvert/templates/latex/ /opt/conda/share/jupyter/nbconvert/templates/latex/
 COPY jupyter/config/lab/user-settings/ /opt/solo-defaults/jupyter-settings/
 COPY jupyter/skills/ /opt/solo-defaults/skills/
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-server \
+    && rm -f /etc/ssh/ssh_host_* \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i '/^root:/s|:/root:|:/home/jovyan:|' /etc/passwd
+COPY jupyter/config/sshd_config /etc/ssh/sshd_config
+COPY jupyter/scripts/configure_ssh_environment.py /usr/local/bin/configure_ssh_environment.py
 COPY --chmod=755 jupyter/scripts/start-jupyter.sh /usr/local/bin/start-jupyter.sh
 WORKDIR /home/jovyan
 ENTRYPOINT ["tini", "-g", "--"]

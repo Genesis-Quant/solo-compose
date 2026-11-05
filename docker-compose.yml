@@ -202,7 +202,7 @@ services:
       - default${SOLO_DOCKER_NETWORK:+_external}
 
   jupyter:
-    image: solo/jupyter:0.2.4
+    image: solo/jupyter:0.2.5
     build:
       context: .
       args: *mirror-environment
@@ -218,8 +218,10 @@ services:
       DOLPHINDB_WORKER_USERNAME: ${DOLPHINDB_WORKER_USERNAME:-}
       DOLPHINDB_WORKER_PASSWORD: ${DOLPHINDB_WORKER_PASSWORD:-}
       JUPYTER_TOKEN: ${JUPYTER_TOKEN:?Set JUPYTER_TOKEN in .env}
+      JUPYTER_SSH_PASSWORD: ${JUPYTER_SSH_PASSWORD:?Set JUPYTER_SSH_PASSWORD in .env}
     ports:
       - "${JUPYTER_BIND_IP:-127.0.0.1}:${JUPYTER_BIND_PORT:-8888}:8888"
+      - "${JUPYTER_SSH_BIND_IP:-127.0.0.1}:${JUPYTER_SSH_PORT:-2222}:22"
     volumes:
       - type: volume
         source: jupyter-home
@@ -227,7 +229,7 @@ services:
         volume:
           nocopy: true
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/login', timeout=5)"]
+      test: ["CMD", "python", "-c", "import socket, urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/login', timeout=5).close(); socket.create_connection(('127.0.0.1', 22), timeout=5).close()"]
       interval: 10s
       timeout: 5s
       retries: 12
