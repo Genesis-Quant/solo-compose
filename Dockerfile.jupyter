@@ -21,7 +21,7 @@ WORKDIR /opt/solo-extension
 COPY jupyter/extension/package.json jupyter/extension/package-lock.json jupyter/extension/.npmrc ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY jupyter/extension/ ./
-RUN npm run build -- --core-package-file "$(python -c 'from pathlib import Path; import jupyterlab; print(Path(jupyterlab.__file__).parent / "staging/package.json")')" \
+RUN npm run build -- --core-path "$(python -c 'from pathlib import Path; import jupyterlab; print(Path(jupyterlab.__file__).parent / "staging")')" \
     && python -m pip wheel --no-cache-dir --no-deps --wheel-dir /tmp/solo-wheel .
 
 FROM base
